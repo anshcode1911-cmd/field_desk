@@ -13,6 +13,8 @@ A local CRM for sales, warehouse operations, customer accounts, and finance, bui
 
 Use customer and sales order tables to find records, open their detail pages, and manage orders through dedicated creation, editing, approval, cancellation, and fulfillment forms. Customer account pages group payments, credits, refunds, and rewards. Local development data includes customer and order histories across approval, fulfillment, and settlement states.
 
+**Assignment submission:** this copy of the original repository adds a shared business rulebook, two correction features (FDSK-169 move a misattributed payment, FDSK-170 correct an overstated delivery), and the architecture and decision documents. Start with [Evaluator notes](Evaluator_notes.md) and the [solution documents](docs/solution/README.md); the rules read as one page in [RULES.md](docs/solution/RULES.md).
+
 See [development setup](CONTRIBUTING.md) to run locally and the [documentation index](docs/README.md) for operating and API references.
 
 ## Related
