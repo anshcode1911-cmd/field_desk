@@ -47,6 +47,7 @@ const HANDLERS: { [T in CommandType]: Handler<T> } = {
   CORRECT_DISPATCHED_ORDER: (s, c, p) => s.fulfillment.correct(c, p),
   RECEIVE_CUSTOMER_PAYMENT: (s, c, p) => s.accounts.receive(c, p),
   ALLOCATE_PAYMENT: (s, c, p) => s.accounts.allocate(c, p),
+  MOVE_PAYMENT: (s, c, p) => s.accounts.movePayment(c, p),
   REDEEM_POINTS: (s, c, p) => s.rewards.redeem(c, p),
   ISSUE_CREDIT_NOTE: (s, c, p) => s.credits.issueCredit(c, p),
   APPLY_CREDIT_NOTE: (s, c, p) => s.credits.applyCredit(c, p),

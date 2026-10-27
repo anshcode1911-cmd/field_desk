@@ -106,6 +106,13 @@ export const crmActionSchema = z.discriminatedUnion('type', [
     reference: z.string().trim().min(1).max(200),
   }),
   action('ALLOCATE_PAYMENT', { customerId: id }),
+  action('MOVE_PAYMENT', {
+    customerId: id,
+    receiptId: id,
+    toCustomerId: id,
+    reason,
+    reference: z.string().trim().min(1).max(200),
+  }),
   action('REDEEM_POINTS', { customerId: id, chargeId: id, points: amount }),
   action('ISSUE_CREDIT_NOTE', { customerId: id, amountPaise: amount, reason }),
   action('APPLY_CREDIT_NOTE', {
@@ -358,6 +365,8 @@ export interface CustomerSummary {
 export interface LedgerView {
   finance: Array<Record<string, unknown>>;
   receipts: Array<Record<string, unknown>>;
+  /** Receipts moved between customers (FDSK-169), in either direction. */
+  transfers: Array<Record<string, unknown>>;
   allocations: Array<Record<string, unknown>>;
   creditApplications: Array<Record<string, unknown>>;
   credits: Array<Record<string, unknown>>;

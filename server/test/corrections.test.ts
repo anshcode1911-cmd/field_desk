@@ -184,6 +184,170 @@ describe('Data corrections', { concurrency: false }, () => {
     assert.deepEqual(failed, []);
   }
 
+  describe('FDSK-169: move a payment recorded against the wrong customer', () => {
+    function receive(
+      customerId: string,
+      amountPaise: number,
+      reference: string,
+    ) {
+      return run(
+        {
+          type: 'RECEIVE_CUSTOMER_PAYMENT',
+          payload: { customerId, amountPaise, reference },
+        },
+        'ACCOUNTS',
+      ).references.receiptId!;
+    }
+    function move(
+      customerId: string,
+      receiptId: string,
+      toCustomerId: string,
+      role: Role = 'ACCOUNTS',
+      expected: ActionResult['status'] = 'APPLIED',
+    ) {
+      return run(
+        {
+          type: 'MOVE_PAYMENT',
+          payload: {
+            customerId,
+            receiptId,
+            toCustomerId,
+            reason: 'Bank reference shows Greenfield paid',
+            reference: 'Bank statement 2026-10-27 line 42',
+          },
+        },
+        role,
+        expected,
+      );
+    }
+
+    it('reopens the wrong customer’s charges, recovers its points, and applies the money at the payer', () => {
+      const northside = customer('Northside');
+      const greenfield = customer('Greenfield');
+      deliveredOrder(northside, 10, [10]);
+      deliveredOrder(greenfield, 4, [4]);
+      const receiptId = receive(northside, 10 * PRICE, 'UTR-GREENFIELD-1');
+      assert.equal(accounts.summary(northside).outstandingPaise, 0);
+      assert.equal(accounts.summary(northside).points.available, 10 * POINTS);
+
+      const result = move(northside, receiptId, greenfield);
+
+      const wrong = accounts.summary(northside);
+      assert.equal(wrong.outstandingPaise, 10 * PRICE);
+      assert.equal(wrong.receivedPaise, 0);
+      assert.equal(wrong.unappliedCashPaise, 0);
+      assert.deepEqual(wrong.points, {
+        locked: 10 * POINTS,
+        available: 0,
+        redeemed: 0,
+        clawbackPending: 0,
+      });
+      const right = accounts.summary(greenfield);
+      assert.equal(right.receivedPaise, 10 * PRICE);
+      assert.equal(right.outstandingPaise, 0);
+      assert.equal(right.unappliedCashPaise, 6 * PRICE);
+      assert.equal(right.points.available, 4 * POINTS);
+
+      const original = accounts
+        .ledger(northside)
+        .receipts.find((row) => row.id === receiptId)!;
+      assert.equal(original.amount_paise, 10 * PRICE);
+      const [transfer] = accounts.ledger(greenfield).transfers;
+      assert.equal(transfer!.receipt_id, receiptId);
+      assert.equal(transfer!.new_receipt_id, result.references.receiptId);
+      assert.deepEqual(accounts.ledger(northside).transfers, [transfer]);
+      for (const customerId of [northside, greenfield]) {
+        assert.ok(customerId in result.aggregateVersions);
+        assert.ok(
+          audit
+            .customerTimeline(customerId)
+            .some((event) => event.type === 'MOVE_PAYMENT'),
+        );
+        assertConsistent(customerId);
+      }
+    });
+
+    it('turns points already spent from the moved money into clawback pending', () => {
+      const northside = customer('Northside spender');
+      const greenfield = customer('Greenfield payer');
+      deliveredOrder(northside, 10, [10]);
+      deliveredOrder(northside, 1, [1]);
+      const receiptId = receive(northside, 10 * PRICE, 'UTR-GREENFIELD-2');
+      const unpaid = accounts
+        .summary(northside)
+        .charges.find((charge) => charge.outstandingPaise > 0)!;
+      run(
+        {
+          type: 'REDEEM_POINTS',
+          payload: {
+            customerId: northside,
+            chargeId: unpaid.id,
+            points: 5 * POINTS,
+          },
+        },
+        'SALES',
+      );
+      move(northside, receiptId, greenfield);
+      const points = accounts.summary(northside).points;
+      assert.equal(points.available, 0);
+      assert.equal(points.redeemed, 5 * POINTS);
+      assert.equal(points.clawbackPending, 5 * POINTS);
+      assertConsistent(northside);
+      assertConsistent(greenfield);
+    });
+
+    it('refuses moves by other roles, to the same customer, of foreign or moved receipts, and of receipts funding credit', () => {
+      const northside = customer('Northside guarded');
+      const greenfield = customer('Greenfield guarded');
+      const receiptId = receive(northside, 3 * PRICE, 'UTR-3');
+      const code = (result: ActionResult) => result.errors[0]?.code;
+      for (const role of ['SALES', 'KAM', 'WAREHOUSE'] as const)
+        assert.equal(
+          code(move(northside, receiptId, greenfield, role, 'REJECTED')),
+          'FORBIDDEN',
+        );
+      assert.equal(
+        code(move(northside, receiptId, northside, 'ACCOUNTS', 'REJECTED')),
+        'SAME_CUSTOMER',
+      );
+      assert.equal(
+        code(move(greenfield, receiptId, northside, 'ACCOUNTS', 'REJECTED')),
+        'RECEIPT_NOT_FOUND',
+      );
+      move(northside, receiptId, greenfield);
+      assert.equal(
+        code(move(northside, receiptId, greenfield, 'ACCOUNTS', 'REJECTED')),
+        'RECEIPT_ALREADY_MOVED',
+      );
+
+      const funding = receive(northside, 2 * PRICE, 'UTR-4');
+      run(
+        {
+          type: 'ISSUE_CREDIT_NOTE',
+          payload: {
+            customerId: northside,
+            amountPaise: PRICE,
+            reason: 'Goodwill credit',
+          },
+        },
+        'ACCOUNTS',
+      );
+      const before = accounts.ledger(northside);
+      const refused = move(
+        northside,
+        funding,
+        greenfield,
+        'ACCOUNTS',
+        'REJECTED',
+      );
+      assert.equal(code(refused), 'RECEIPT_FUNDS_CREDIT');
+      assert.match(refused.errors[0]!.message, /CUS-001/);
+      assert.deepEqual(accounts.ledger(northside), before);
+      assertConsistent(northside);
+      assertConsistent(greenfield);
+    });
+  });
+
   describe('FDSK-170: correct an overstated delivery', () => {
     it('reopens the shipment, frees the overpaid cash, relocks points, and reapplies cash when the rest arrives', () => {
       const customerId = customer('Overstated delivery');

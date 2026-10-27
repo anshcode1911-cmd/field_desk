@@ -4,7 +4,7 @@
 
 | Directory                                     | Responsibility                                                                                                                                      |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Accounts](accounts/README.md)                | Owns receivable entries, customer cash receipts, payment allocations, and account balance projections.                                              |
+| [Accounts](accounts/README.md)                | Owns receivable entries, customer cash receipts and their transfers, payment allocations, and account balance projections.                          |
 | [Actions](actions/README.md)                  | Owns the command execution boundary and persisted idempotency outcomes for CRM activities.                                                          |
 | [Audit](audit/README.md)                      | Owns business activity history, posting provenance, action traces, and account consistency review.                                                  |
 | [Authentication](auth/README.md)              | Owns sign-in, registration, JWT verification, persisted sessions, and request authentication and role guards.                                       |

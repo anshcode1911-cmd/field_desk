@@ -99,6 +99,8 @@ export class AuditService {
       reason = `Reserve ${row.amount_paise} paise owed to the customer as explicit credit. Receipt funding is retained; application or refund requires Accounts action.`;
     } else if (table === 'credit_funds') {
       reason = `Reserve ${row.amount_paise} paise of receipt ${row.receipt_id} for credit ${row.credit_note_id}, preventing reuse as unapplied cash.`;
+    } else if (table === 'receipt_transfers') {
+      reason = `Move ${row.amount_paise} paise of receipt ${row.receipt_id} from customer ${row.from_customer_id} to customer ${row.to_customer_id} as receipt ${row.new_receipt_id}; bank reference ${row.reference}. The original receipt remains recorded with no retained value.`;
     } else if (table === 'payment_receipts') {
       reason = `Receive ${row.amount_paise} paise against customer ${row.customer_id}, reference ${row.reference}. No order is selected at capture.`;
     } else if (table === 'cancellations') {

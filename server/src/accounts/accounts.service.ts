@@ -47,6 +47,75 @@ export class AccountsService {
   allocate(c: Context, p: Payload<'ALLOCATE_PAYMENT'>) {
     useCustomer(c, this.customersRepository.findById(p.customerId));
   }
+  /**
+   * FDSK-169. Release everything the receipt settled at the wrong customer,
+   * then record the same money as a new, linked receipt at the right one.
+   * The right customer becomes the action's subject, so the rulebook's
+   * "allocate free cash" applies there (a receipt is a WF-002 occasion);
+   * rewards are refreshed for both.
+   */
+  movePayment(c: Context, p: Payload<'MOVE_PAYMENT'>) {
+    const from = useCustomer(
+      c,
+      this.customersRepository.findById(p.customerId),
+    );
+    const receipt = this.accountsRepository.findCustomerReceipt(
+      p.receiptId,
+      from.id,
+    );
+    if (!receipt)
+      fail('RECEIPT_NOT_FOUND', 'Select a receipt recorded for this customer');
+    if (p.toCustomerId === from.id)
+      fail('SAME_CUSTOMER', 'Choose the customer who actually paid');
+    const to = this.customersRepository.findById(p.toCustomerId);
+    if (!to) fail('CUSTOMER_NOT_FOUND', 'The paying customer was not found');
+    const { received } = this.settlement.receipt(receipt);
+    if (!received)
+      fail('RECEIPT_ALREADY_MOVED', 'This receipt was already moved');
+    const funds = this.creditsRepository.fundsFromReceipt(receipt.id);
+    if (funds.length)
+      fail(
+        'RECEIPT_FUNDS_CREDIT',
+        `This payment funds credit note(s) ${[...new Set(funds.map((fund) => fund.credit_note_id))].join(', ')}. Credit cannot move between customers (CUS-001) and the rules define no way to withdraw its funding, so the payment cannot be moved automatically.`,
+      );
+    for (const allocation of this.accountsRepository.allocationsByChargeForReceipt(
+      receipt.id,
+    ))
+      this.accountsRepository.insertAllocation(c, {
+        id: randomUUID(),
+        customer_id: from.id,
+        receipt_id: receipt.id,
+        charge_id: allocation.charge_id,
+        amount_paise: -allocation.n,
+        action_id: c.id,
+        created_at: c.now,
+      });
+    const newReceiptId = randomUUID();
+    this.accountsRepository.insertReceipt(c, {
+      id: newReceiptId,
+      customer_id: to.id,
+      amount_paise: received,
+      reference: receipt.reference,
+      action_id: c.id,
+      created_at: c.now,
+    });
+    this.accountsRepository.insertTransfer(c, {
+      id: randomUUID(),
+      receipt_id: receipt.id,
+      from_customer_id: from.id,
+      to_customer_id: to.id,
+      new_receipt_id: newReceiptId,
+      amount_paise: received,
+      reason: p.reason,
+      reference: p.reference,
+      action_id: c.id,
+      created_at: c.now,
+    });
+    c.references.movedReceiptId = receipt.id;
+    c.references.receiptId = newReceiptId;
+    c.customerId = to.id;
+    c.alsoAffects = [from.id];
+  }
   allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
       customerId,
@@ -147,6 +216,7 @@ export class AccountsService {
     return {
       finance: this.accountsRepository.entriesForCustomer(customerId),
       receipts: this.accountsRepository.receiptsByInsertion(customerId),
+      transfers: this.accountsRepository.transfersForCustomer(customerId),
       allocations: this.accountsRepository.allocationsForCustomer(customerId),
       creditApplications:
         this.creditsRepository.applicationsForCustomer(customerId),

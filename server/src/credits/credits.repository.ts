@@ -27,6 +27,14 @@ export class CreditsRepository {
         .get()?.value ?? 0,
     );
   }
+  fundsFromReceipt(receiptId: string) {
+    return this.db
+      .select()
+      .from(crmCreditFunds)
+      .where(eq(crmCreditFunds.receipt_id, receiptId))
+      .orderBy(insertionOrder(crmCreditFunds))
+      .all();
+  }
   appliedToCharge(chargeId: string) {
     return safe(
       this.db
