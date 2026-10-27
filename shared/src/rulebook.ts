@@ -20,11 +20,26 @@ import type { CommandType } from './crm.js';
  * first, then cash allocation, then the reward points derived from cash.
  */
 export const REACTIONS = {
-  'allocate free cash':
-    'ACC-003: apply unallocated customer cash to outstanding charges, oldest first.',
-  'refresh rewards':
-    'REW-001..003: recompute locked, earned and clawback points from approved quantities and cash, and post only the difference.',
-} as const;
+  'allocate free cash': {
+    rules: ['ACC-003', 'WF-002'],
+    says: 'Apply unallocated customer cash to outstanding charges, oldest first.',
+    /** An allocation occasion belongs to the customer the action is about. */
+    scope: 'subject',
+  },
+  'refresh rewards': {
+    rules: ['REW-001', 'REW-002', 'REW-003'],
+    says: 'Recompute locked, earned and clawback points from approved quantities and cash, and post only the difference.',
+    /** Points are derived values, so every customer whose books changed is refreshed. */
+    scope: 'every affected customer',
+  },
+} as const satisfies Record<
+  string,
+  {
+    rules: readonly string[];
+    says: string;
+    scope: 'subject' | 'every affected customer';
+  }
+>;
 export type Reaction = keyof typeof REACTIONS;
 export const REACTION_ORDER = Object.keys(REACTIONS) as Reaction[];
 

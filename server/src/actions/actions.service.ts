@@ -5,6 +5,7 @@ import type { ActionEnvelope, ActionResult } from '@crm/shared/crm';
 import { BUSINESS_TERMS_VERSION } from '@crm/shared/crm';
 import {
   RULEBOOK,
+  REACTIONS,
   REACTION_ORDER,
   can,
   type Reaction,
@@ -177,37 +178,49 @@ export class ActionsService {
             if (!can(actor.role, envelope.command.type))
               fail('FORBIDDEN', 'This operation requires a different role');
             runHandler(this.services, c, envelope.command);
+            // The subject is the customer the action is about; an action may
+            // also change other customers' books (FDSK-169 moves a payment).
+            const affected = [
+              ...new Set([c.customerId, ...(c.alsoAffects ?? [])]),
+            ];
             const reactions: readonly Reaction[] = rule.then;
             for (const reaction of REACTION_ORDER)
               if (reactions.includes(reaction))
-                REACTION_HANDLERS[reaction](this.services, c);
-            this.customersRepository.updateCustomer(c, c.customerId, {
-              version:
-                this.accountsService.summary(c.customerId).customer.version + 1,
-            });
-            for (const order of this.ordersRepository.forCustomer(c.customerId))
-              this.ordersRepository.updateOrder(c, order.id, {
-                version: order.version + 1,
+                for (const customerId of REACTIONS[reaction].scope === 'subject'
+                  ? [c.customerId]
+                  : affected)
+                  REACTION_HANDLERS[reaction](this.services, c, customerId);
+            const reviews = affected.map((customerId) => {
+              this.customersRepository.updateCustomer(c, customerId, {
+                version:
+                  this.accountsService.summary(customerId).customer.version + 1,
               });
-            result.aggregateVersions[c.customerId] =
-              this.customersRepository.findById(c.customerId)!.version;
-            for (const order of this.ordersRepository.forCustomer(c.customerId))
-              result.aggregateVersions[order.id] = order.version;
-            this.auditRepository.insertEvent(c, {
-              id: randomUUID(),
-              customer_id: c.customerId,
-              order_id: c.orderId ?? null,
-              actor_id: actor.id,
-              actor_name: actor.name,
-              requested_by: requester.id,
-              action_id: c.id,
-              type: envelope.command.type,
-              payload: JSON.stringify(envelope.command.payload),
-              occurred_at: c.now,
+              for (const order of this.ordersRepository.forCustomer(customerId))
+                this.ordersRepository.updateOrder(c, order.id, {
+                  version: order.version + 1,
+                });
+              result.aggregateVersions[customerId] =
+                this.customersRepository.findById(customerId)!.version;
+              for (const order of this.ordersRepository.forCustomer(customerId))
+                result.aggregateVersions[order.id] = order.version;
+              this.auditRepository.insertEvent(c, {
+                id: randomUUID(),
+                customer_id: customerId,
+                order_id:
+                  customerId === c.customerId ? (c.orderId ?? null) : null,
+                actor_id: actor.id,
+                actor_name: actor.name,
+                requested_by: requester.id,
+                action_id: c.id,
+                type: envelope.command.type,
+                payload: JSON.stringify(envelope.command.payload),
+                occurred_at: c.now,
+              });
+              return this.auditService.review(customerId);
             });
-            result.review = this.auditService.review(c.customerId);
-            const failedChecks = result.review.checks.filter(
-              (check) => !check.passed,
+            result.review = reviews[0];
+            const failedChecks = reviews.flatMap((review) =>
+              review.checks.filter((check) => !check.passed),
             );
             if (failedChecks.length)
               fail(

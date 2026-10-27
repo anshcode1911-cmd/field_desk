@@ -15,7 +15,10 @@ export interface ActionContext {
   actor: User;
   requester: User;
   now: string;
+  /** The customer the action is about. */
   customerId: string;
+  /** Other customers whose books the action also changes. */
+  alsoAffects?: string[];
   orderId?: string;
   effects: ActionResult['effects'];
   references: Record<string, string>;

@@ -59,10 +59,11 @@ const HANDLERS: { [T in CommandType]: Handler<T> } = {
 /** Implementations of the rulebook's follow-up policies. */
 export const REACTION_HANDLERS: Record<
   Reaction,
-  (s: DomainServices, c: Context) => void
+  (s: DomainServices, c: Context, customerId: string) => void
 > = {
-  'allocate free cash': (s, c) => s.accounts.allocateCash(c),
-  'refresh rewards': (s, c) => s.rewards.refresh(c),
+  'allocate free cash': (s, c, customerId) =>
+    s.accounts.allocateCash(c, customerId),
+  'refresh rewards': (s, c, customerId) => s.rewards.refresh(c, customerId),
 };
 
 export function runHandler(s: DomainServices, c: Context, command: CrmCommand) {

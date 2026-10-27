@@ -47,15 +47,15 @@ export class AccountsService {
   allocate(c: Context, p: Payload<'ALLOCATE_PAYMENT'>) {
     useCustomer(c, this.customersRepository.findById(p.customerId));
   }
-  allocateCash(c: Context) {
+  allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
-      c.customerId,
+      customerId,
     )) {
       let available = this.settlement.receipt(receipt).free;
       if (available < 0)
         fail('RECEIPT_MISMATCH', 'Receipt allocations exceed captured funds');
       for (const charge of this.accountsRepository.chargesInDueOrder(
-        c.customerId,
+        customerId,
       )) {
         if (!available) break;
         const take = Math.min(
@@ -65,7 +65,7 @@ export class AccountsService {
         if (take)
           this.accountsRepository.insertAllocation(c, {
             id: randomUUID(),
-            customer_id: c.customerId,
+            customer_id: customerId,
             receipt_id: receipt.id,
             charge_id: charge.id,
             amount_paise: take,
@@ -108,15 +108,15 @@ export class AccountsService {
           ).availablePaise,
         };
       });
-    const receipts = this.accountsRepository.receiptsByInsertion(customerId);
+    const receipts = this.accountsRepository
+      .receiptsByInsertion(customerId)
+      .map((receipt) => this.settlement.receipt(receipt));
     const unappliedCashPaise = safe(
-      receipts.reduce(
-        (sum, receipt) => sum + this.settlement.receipt(receipt).free,
-        0,
-      ),
+      receipts.reduce((sum, receipt) => sum + receipt.free, 0),
     );
-    const receivedPaise =
-      this.accountsRepository.receivedForCustomer(customerId);
+    const receivedPaise = safe(
+      receipts.reduce((sum, receipt) => sum + receipt.received, 0),
+    );
     const refundsPaise = this.creditsRepository.refundedForCustomer(customerId);
     const redemption = this.rewardsRepository.redeemedForCustomer(customerId);
     const netBalancePaise = safe(
