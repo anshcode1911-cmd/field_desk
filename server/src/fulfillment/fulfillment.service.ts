@@ -6,6 +6,7 @@ import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js'
 import { AccountsRepository } from '../accounts/accounts.repository.js';
 import { CatalogRepository } from '../catalog/catalog.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import {
   useOrder,
@@ -25,6 +26,7 @@ export class FulfillmentService {
     private readonly accountsRepository: AccountsRepository,
     private readonly catalogRepository: CatalogRepository,
     private readonly returnsRepository: ReturnsRepository,
+    private readonly settlement: SettlementService,
   ) {}
   load(c: Context, p: Payload<'START_LOADING'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
@@ -173,6 +175,95 @@ export class FulfillmentService {
           'Select an open dispatched shipment',
         ),
       });
+  }
+  /**
+   * FDSK-170. Lower the delivered quantity of shipment lines to what actually
+   * arrived. The newest confirmations are reversed first: returns consume a
+   * line's charges oldest first (WF-003), so whenever the corrected quantity
+   * is at least the returned quantity, every reversed confirmation's charge
+   * still holds enough value.
+   */
+  correctDelivery(c: Context, p: Payload<'CORRECT_DELIVERY'>) {
+    const order = useOrder(c, this.ordersRepository.findById(p.orderId));
+    const shipment = this.fulfillmentRepository.findForOrder(
+      p.shipmentId,
+      order.id,
+    );
+    if (!shipment)
+      fail('SHIPMENT_NOT_FOUND', 'Select a shipment belonging to this order');
+    const status = transition(
+      SHIPMENT_LIFECYCLE,
+      'correct an overstated delivery',
+      shipment.status,
+      'SHIPMENT_STATE',
+      'Only dispatched or delivered shipments have deliveries to correct',
+    );
+    c.references.shipmentId = shipment.id;
+    for (const item of p.items) {
+      const line = this.fulfillmentRepository.findInShipment(
+        item.shipmentLineId,
+        shipment.id,
+      );
+      if (!line)
+        fail(
+          'LINE_NOT_FOUND',
+          'The shipment line does not belong to this shipment',
+        );
+      const delivered = this.fulfillmentRepository.deliveredForShipmentLine(
+        line.id,
+      );
+      new ShipmentQuantity(line.dispatched_qty, delivered).assertCorrection(
+        item.deliveredQty,
+        this.returnsRepository.returnedForShipmentLine(line.id),
+      );
+      let excess = delivered - item.deliveredQty;
+      for (const confirmation of this.fulfillmentRepository.unreversedConfirmationsNewestFirst(
+        line.id,
+      )) {
+        if (!excess) break;
+        const qty = Math.min(excess, confirmation.remaining);
+        const reversalId = randomUUID();
+        this.fulfillmentRepository.insertDelivery(c, {
+          id: reversalId,
+          shipment_line_id: line.id,
+          order_id: order.id,
+          qty: -qty,
+          reversal_of_id: confirmation.id,
+          reason: p.reason,
+          evidence: p.evidence,
+          action_id: c.id,
+          created_at: c.now,
+        });
+        const [charge] = this.accountsRepository.chargesForDelivery(
+          confirmation.id,
+        );
+        if (!charge)
+          fail('CHARGE_MISMATCH', 'The confirmation has no goods charge');
+        const reduction = safe(qty * line.unit_price_paise);
+        if (reduction > this.settlement.charge(charge).retainedPaise)
+          fail(
+            'CHARGE_MISMATCH',
+            'The confirmation’s charge no longer holds this value',
+          );
+        this.accountsRepository.insertCharge(c, {
+          id: randomUUID(),
+          customer_id: c.customerId,
+          order_id: order.id,
+          line_key: line.line_key,
+          shipment_line_id: line.id,
+          kind: 'DELIVERY_CORRECTION',
+          amount_paise: -reduction,
+          adjusts_id: charge.id,
+          source_id: reversalId,
+          action_id: c.id,
+          created_at: c.now,
+        });
+        this.settlement.releaseOverSettlement(c, charge, reversalId);
+        excess -= qty;
+      }
+    }
+    if (status !== shipment.status)
+      this.fulfillmentRepository.updateShipment(c, shipment.id, { status });
   }
   correct(c: Context, p: Payload<'CORRECT_DISPATCHED_ORDER'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));

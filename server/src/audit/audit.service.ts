@@ -75,7 +75,9 @@ export class AuditService {
           ? `Returned goods reduce charge ${row.adjusts_id} by ${-Number(row.amount_paise)} paise; the original charge remains recorded.`
           : row.kind === 'RETURN_FEE'
             ? `Return ${row.source_id} incurs the recorded deduction of ${row.amount_paise} paise.`
-            : `Confirmed delivery ${row.source_id} recognizes ${row.amount_paise} paise for shipment line ${row.shipment_line_id}; unconfirmed units create no charge.`;
+            : row.kind === 'DELIVERY_CORRECTION'
+              ? `Delivery correction ${row.source_id} reduces charge ${row.adjusts_id} by ${-Number(row.amount_paise)} paise for units that did not arrive; the original charge remains recorded.`
+              : `Confirmed delivery ${row.source_id} recognizes ${row.amount_paise} paise for shipment line ${row.shipment_line_id}; unconfirmed units create no charge.`;
     } else if (table === 'payment_allocations') {
       reason =
         Number(row.amount_paise) > 0
@@ -102,7 +104,9 @@ export class AuditService {
     } else if (table === 'cancellations') {
       reason = `Cancel ${row.qty} unshipped units of line ${row.line_key}; dispatched and delivered quantities remain historical facts.`;
     } else if (table === 'deliveries') {
-      reason = `Confirm ${row.qty} delivered units on shipment line ${row.shipment_line_id}; each confirmation creates one incremental goods charge.`;
+      reason = row.reversal_of_id
+        ? `Reverse ${-Number(row.qty)} overstated delivered units of confirmation ${row.reversal_of_id} on shipment line ${row.shipment_line_id}; evidence: ${row.evidence}. The original confirmation remains recorded.`
+        : `Confirm ${row.qty} delivered units on shipment line ${row.shipment_line_id}; each confirmation creates one incremental goods charge.`;
     } else if (table === 'approvals') {
       reason = `${row.decision} applies specifically to commercial revision ${row.revision}.`;
     } else if (table === 'shipments') {

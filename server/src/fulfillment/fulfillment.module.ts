@@ -6,6 +6,7 @@ import { FulfillmentRepositoryModule } from '../fulfillment/fulfillment.reposito
 import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
 import { CatalogRepositoryModule } from '../catalog/catalog.repository.js';
 import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
+import { SettlementModule } from '../settlement/settlement.module.js';
 @Module({
   imports: [
     OrdersRepositoryModule,
@@ -13,6 +14,7 @@ import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
     AccountsRepositoryModule,
     CatalogRepositoryModule,
     ReturnsRepositoryModule,
+    SettlementModule,
   ],
   controllers: [FulfillmentController],
   providers: [FulfillmentService],

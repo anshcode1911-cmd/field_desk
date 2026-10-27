@@ -42,6 +42,7 @@ const HANDLERS: { [T in CommandType]: Handler<T> } = {
   START_LOADING: (s, c, p) => s.fulfillment.load(c, p),
   DISPATCH_SHIPMENT: (s, c, p) => s.fulfillment.dispatch(c, p),
   CONFIRM_DELIVERY: (s, c, p) => s.fulfillment.deliver(c, p),
+  CORRECT_DELIVERY: (s, c, p) => s.fulfillment.correctDelivery(c, p),
   RECORD_RETURN: (s, c, p) => s.returns.returnItems(c, p),
   CORRECT_DISPATCHED_ORDER: (s, c, p) => s.fulfillment.correct(c, p),
   RECEIVE_CUSTOMER_PAYMENT: (s, c, p) => s.accounts.receive(c, p),

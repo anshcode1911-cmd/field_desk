@@ -100,6 +100,12 @@ export const RULEBOOK = {
     says: 'Confirm some or all dispatched units as delivered; each confirmation creates exactly one goods charge.',
     then: ['allocate free cash', 'refresh rewards'],
   },
+  CORRECT_DELIVERY: {
+    rules: ['FUL-001', 'FUL-006', 'WF-001', 'WF-003', 'WF-005'],
+    who: ['KAM'],
+    says: 'Lower an overstated delivered quantity to what actually arrived, with a reason and evidence: the newest confirmations are reversed by linked entries, their charges reduced, excess settlement released back to its sources, and the shipment reopened so Warehouse can confirm the rest later. Freed cash stays unapplied until the next allocation occasion.',
+    then: ['refresh rewards'],
+  },
   RECORD_RETURN: {
     rules: ['RET-001', 'RET-002', 'WF-003'],
     who: ['WAREHOUSE'],
@@ -212,6 +218,11 @@ export const SHIPMENT_LIFECYCLE = {
     ['confirm some dispatched units', ['DISPATCHED'], 'DISPATCHED'],
     ['confirm the last undelivered units', ['DISPATCHED'], 'DELIVERED'],
     ['void after an order change', ['LOADING'], 'VOIDED'],
+    [
+      'correct an overstated delivery',
+      ['DISPATCHED', 'DELIVERED'],
+      'DISPATCHED',
+    ],
   ],
 } as const satisfies Lifecycle<ShipmentStatus, string>;
 
@@ -255,7 +266,7 @@ export const INVARIANTS = {
   },
   'delivery-charge': {
     rules: ['WF-005'],
-    says: 'Each delivery confirmation has exactly one goods charge worth quantity × shipment price.',
+    says: 'Each delivery confirmation, and each correction of one, has exactly one charge entry worth quantity × shipment price.',
   },
   'recognized-value': {
     rules: ['WF-005', 'RET-002'],
