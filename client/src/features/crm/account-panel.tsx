@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CommandType, CustomerSnapshot } from '@crm/shared/crm';
+import { can } from '@crm/shared/rulebook';
 import { Button } from '@/components/ui/button';
 import { useCrm } from './context';
 import { ActivityDialog } from './activity-dialog';
@@ -13,14 +14,15 @@ export function AccountPanel({
   snapshot: CustomerSnapshot;
   rewards?: boolean;
 }) {
-  const { actor } = useCrm();
+  const { actor, data } = useCrm();
   const [tab, setTab] = useState('receipts');
   const [action, setAction] = useState<{
     type: CommandType;
     entryId?: string;
   } | null>(null);
-  const accounts = ['ADMIN', 'ACCOUNTS'].includes(actor.role);
-  const redeem = ['ADMIN', 'SALES', 'ACCOUNTS'].includes(actor.role);
+  // Every account action here belongs to Accounts in the rulebook.
+  const accounts = can(actor.role, 'RECEIVE_CUSTOMER_PAYMENT');
+  const redeem = can(actor.role, 'REDEEM_POINTS');
   const { summary, ledger } = snapshot;
   const orderLink = (id: unknown) => {
     const order = snapshot.orders.find((row) => row.order.id === id);
@@ -41,7 +43,14 @@ export function AccountPanel({
       CORRECTION: 'Shipment correction',
       RETURN: 'Returned goods',
       RETURN_FEE: 'Return deduction',
+      DELIVERY_CORRECTION: 'Delivery correction',
     })[String(kind) as 'DELIVERY'] ?? String(kind);
+  const customerName = (id: unknown) =>
+    data?.customers.find((row) => row.id === id)?.name ?? 'another customer';
+  const transferOf = (id: unknown) =>
+    ledger.transfers.find(
+      (row) => row.receipt_id === id || row.new_receipt_id === id,
+    );
   const reversed = (
     rows: Array<Record<string, unknown>>,
     id: unknown,
@@ -173,14 +182,46 @@ export function AccountPanel({
           />
           {tab === 'receipts' &&
             (ledger.receipts.length ? (
-              <Table columns={['Received', 'Payment reference', 'Amount']}>
-                {[...ledger.receipts].reverse().map((row) => (
-                  <tr key={String(row.id)}>
-                    <td>{date(row.created_at)}</td>
-                    <td className="font-medium">{String(row.reference)}</td>
-                    <td>{money(Number(row.amount_paise))}</td>
-                  </tr>
-                ))}
+              <Table columns={['Received', 'Payment reference', 'Amount', '']}>
+                {[...ledger.receipts].reverse().map((row) => {
+                  const transfer = transferOf(row.id);
+                  const movedOut = transfer?.receipt_id === row.id;
+                  return (
+                    <tr key={String(row.id)}>
+                      <td>{date(row.created_at)}</td>
+                      <td className="font-medium">
+                        {String(row.reference)}
+                        {transfer && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {movedOut
+                              ? `Moved to ${customerName(transfer.to_customer_id)}`
+                              : `Moved from ${customerName(transfer.from_customer_id)}`}{' '}
+                            · {String(transfer.reason)}
+                          </span>
+                        )}
+                      </td>
+                      <td className={movedOut ? 'line-through' : undefined}>
+                        {money(Number(row.amount_paise))}
+                      </td>
+                      <td className="text-right">
+                        {can(actor.role, 'MOVE_PAYMENT') && !movedOut && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setAction({
+                                type: 'MOVE_PAYMENT',
+                                entryId: String(row.id),
+                              })
+                            }
+                          >
+                            Wrong customer?
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </Table>
             ) : (
               <Empty

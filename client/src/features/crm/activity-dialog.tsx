@@ -29,6 +29,8 @@ const titles: Partial<Record<CommandType, string>> = {
   CANCEL_REMAINDER: 'Cancel unshipped items',
   RECORD_RETURN: 'Record a return',
   CORRECT_DISPATCHED_ORDER: 'Record shipment correction',
+  CORRECT_DELIVERY: 'Correct delivered quantity',
+  MOVE_PAYMENT: 'Move payment to the paying customer',
   RECEIVE_CUSTOMER_PAYMENT: 'Record payment',
   ALLOCATE_PAYMENT: 'Allocate available cash',
   REDEEM_POINTS: 'Redeem reward points',
@@ -73,6 +75,8 @@ export function ActivityDialog({
     'REVERSE_CREDIT_APPLICATION',
     'REVERSE_CREDIT_REFUND',
     'CORRECT_DISPATCHED_ORDER',
+    'CORRECT_DELIVERY',
+    'MOVE_PAYMENT',
   ].includes(type);
   const amountNeeded = [
     'RECEIVE_CUSTOMER_PAYMENT',
@@ -86,6 +90,7 @@ export function ActivityDialog({
     'RECEIVE_CUSTOMER_PAYMENT',
     'REFUND_CREDIT_NOTE',
     'REVERSE_CREDIT_REFUND',
+    'MOVE_PAYMENT',
   ].includes(type);
   const creditNeeded =
     type === 'APPLY_CREDIT_NOTE' || type === 'REFUND_CREDIT_NOTE';
@@ -125,6 +130,13 @@ export function ActivityDialog({
               })),
             )
             .filter((line) => line.limit > 0);
+  const correctableLines = (shipment?.lines ?? []).filter(
+    (line) => line.delivered > line.returned,
+  );
+  const movedReceipt =
+    type === 'MOVE_PAYMENT'
+      ? snapshot.ledger.receipts.find((row) => row.id === entryId)
+      : undefined;
   const selectedCredit = summary.credits.find((row) => row.id === entryId);
   const reversalEntry =
     type === 'REVERSE_CREDIT_APPLICATION'
@@ -144,6 +156,7 @@ export function ActivityDialog({
       'CANCEL_REMAINDER',
       'RECORD_RETURN',
       'CORRECT_DISPATCHED_ORDER',
+      'CORRECT_DELIVERY',
     ].includes(type);
     const payload: Record<string, unknown> = orderAction
       ? { orderId: detail!.order.id }
@@ -165,8 +178,32 @@ export function ActivityDialog({
         return;
       }
     }
-    if (type === 'DISPATCH_SHIPMENT' || type === 'CONFIRM_DELIVERY')
+    if (
+      type === 'DISPATCH_SHIPMENT' ||
+      type === 'CONFIRM_DELIVERY' ||
+      type === 'CORRECT_DELIVERY'
+    )
       payload.shipmentId = shipmentId;
+    if (type === 'CORRECT_DELIVERY') {
+      payload.items = correctableLines
+        .map((line) => ({
+          shipmentLineId: line.id,
+          deliveredQty: Number(form.get(`delivered-${line.id}`)),
+        }))
+        .filter(
+          (item, index) =>
+            item.deliveredQty < correctableLines[index]!.delivered,
+        );
+      payload.evidence = form.get('evidence');
+      if (!(payload.items as unknown[]).length) {
+        setError('Lower the delivered quantity of at least one item.');
+        return;
+      }
+    }
+    if (type === 'MOVE_PAYMENT') {
+      payload.receiptId = entryId;
+      payload.toCustomerId = form.get('toCustomer');
+    }
     try {
       if (type === 'RECORD_RETURN') payload.feePaise = paise(form.get('fee'));
       if (amountNeeded) payload.amountPaise = paise(form.get('amount'));
@@ -222,7 +259,9 @@ export function ActivityDialog({
     >
       <DialogContent
         className={
-          quantities || type === 'CORRECT_DISPATCHED_ORDER'
+          quantities ||
+          type === 'CORRECT_DISPATCHED_ORDER' ||
+          type === 'CORRECT_DELIVERY'
             ? 'max-w-3xl bg-white'
             : 'bg-white'
         }
@@ -301,6 +340,83 @@ export function ActivityDialog({
                   ))}
                 </Table>
               </div>
+            )}
+            {type === 'CORRECT_DELIVERY' && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Enter what actually reached the customer. The overstated
+                  confirmation is reversed, its charge and any payments on it
+                  are adjusted, and the shipment reopens so the warehouse can
+                  confirm the remaining units when they arrive.
+                </p>
+                <div className="overflow-hidden rounded-lg border">
+                  <Table columns={['Item', 'Confirmed', 'Actually delivered']}>
+                    {correctableLines.map((line) => (
+                      <tr key={line.id}>
+                        <td className="min-w-40">
+                          {data?.skus.find((sku) => sku.id === line.sku_id)
+                            ?.name ?? 'Product'}
+                        </td>
+                        <td className="text-muted-foreground">
+                          {line.delivered} delivered
+                          {line.returned ? ` · ${line.returned} returned` : ''}
+                        </td>
+                        <td>
+                          <Input
+                            className="w-24 bg-white"
+                            aria-label="Actually delivered"
+                            name={`delivered-${line.id}`}
+                            type="number"
+                            min={line.returned}
+                            max={line.delivered}
+                            step={1}
+                            defaultValue={line.delivered}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                </div>
+                <Field name="evidence" label="Supporting evidence">
+                  <Input
+                    id="evidence"
+                    name="evidence"
+                    required
+                    minLength={8}
+                    maxLength={2000}
+                    placeholder="Customer goods receipt or transporter note"
+                  />
+                </Field>
+              </>
+            )}
+            {type === 'MOVE_PAYMENT' && movedReceipt && (
+              <>
+                <p className="rounded-md bg-muted p-3 text-sm">
+                  <strong>{money(Number(movedReceipt.amount_paise))}</strong>{' '}
+                  received with reference{' '}
+                  <strong>{String(movedReceipt.reference)}</strong>. Charges it
+                  settled for {summary.customer.name} will reopen, points earned
+                  from it will be recovered, and the payment will be applied to
+                  the customer who paid.
+                </p>
+                <Field name="toCustomer" label="Customer who actually paid">
+                  <NativeSelect
+                    id="toCustomer"
+                    name="toCustomer"
+                    required
+                    className="w-full"
+                  >
+                    <option value="">Select customer</option>
+                    {data?.customers
+                      .filter((row) => row.id !== summary.customer.id)
+                      .map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.name} · {row.code}
+                        </option>
+                      ))}
+                  </NativeSelect>
+                </Field>
+              </>
             )}
             {type === 'RECORD_RETURN' && (
               <Field name="fee" label="Return deduction (₹)">
@@ -385,7 +501,14 @@ export function ActivityDialog({
               </Field>
             )}
             {referenceNeeded && (
-              <Field name="reference" label="Payment / bank reference">
+              <Field
+                name="reference"
+                label={
+                  type === 'MOVE_PAYMENT'
+                    ? 'Bank reference showing the real payer'
+                    : 'Payment / bank reference'
+                }
+              >
                 <Input
                   id="reference"
                   name="reference"

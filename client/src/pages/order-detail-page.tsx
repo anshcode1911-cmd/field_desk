@@ -6,6 +6,12 @@ import type {
   CustomerSnapshot,
   OrderDetail,
 } from '@crm/shared/crm';
+import {
+  can,
+  nextStatus,
+  ORDER_LIFECYCLE,
+  SHIPMENT_LIFECYCLE,
+} from '@crm/shared/rulebook';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ErrorNotice, Loading } from '@/components/feedback';
@@ -42,9 +48,8 @@ export function OrderDetailPage() {
   if (!detail) return <Loading label="Loading order…" />;
   const { order, lines, shipments } = detail;
   const customer = account.data?.summary.customer;
-  const sales = ['ADMIN', 'SALES'].includes(actor.role);
-  const commercial = ['ADMIN', 'KAM'].includes(actor.role);
-  const warehouse = ['ADMIN', 'WAREHOUSE'].includes(actor.role);
+  // Buttons follow the shared rulebook: who may act, and from which status.
+  const may = (type: CommandType) => can(actor.role, type);
   const dispatched = shipments.some((shipment) => shipment.dispatched_at);
   const canceled = order.status === 'CANCELLED';
   const open = lines.reduce((sum, line) => sum + line.open, 0);
@@ -59,7 +64,7 @@ export function OrderDetailPage() {
         <Button variant="outline" onClick={refresh}>
           Refresh
         </Button>
-        {sales && !dispatched && !canceled && (
+        {may('EDIT_ORDER') && !dispatched && !canceled && (
           <Button asChild variant="outline">
             <Link to={`/orders/${id}/edit`}>
               <Pencil />
@@ -67,7 +72,7 @@ export function OrderDetailPage() {
             </Link>
           </Button>
         )}
-        {sales && open > 0 && !canceled && (
+        {may('CANCEL_REMAINDER') && open > 0 && !canceled && (
           <Button
             variant="outline"
             disabled={!ready}
@@ -77,10 +82,8 @@ export function OrderDetailPage() {
             Cancel items
           </Button>
         )}
-        {sales &&
-          ['DRAFT', 'REJECTED', 'REAPPROVAL_REQUIRED'].includes(
-            order.status,
-          ) && (
+        {may('SUBMIT_ORDER') &&
+          nextStatus(ORDER_LIFECYCLE, 'submit', order.status) && (
             <Button
               disabled={!ready}
               onClick={() => setAction({ type: 'SUBMIT_ORDER' })}
@@ -88,8 +91,8 @@ export function OrderDetailPage() {
               Submit for approval
             </Button>
           )}
-        {commercial &&
-          ['PENDING', 'REAPPROVAL_REQUIRED'].includes(order.status) && (
+        {may('APPROVE_ORDER') &&
+          nextStatus(ORDER_LIFECYCLE, 'approve', order.status) && (
             <>
               <Button
                 variant="outline"
@@ -106,7 +109,7 @@ export function OrderDetailPage() {
               </Button>
             </>
           )}
-        {warehouse &&
+        {may('START_LOADING') &&
           order.status === 'APPROVED' &&
           lines.some((line) => line.open > line.loaded) && (
             <Button
@@ -254,34 +257,67 @@ export function OrderDetailPage() {
                       </div>
                       <Status value={shipment.status} />
                     </div>
-                    {warehouse && shipment.status === 'LOADING' && (
-                      <Button
-                        size="sm"
-                        disabled={!ready}
-                        onClick={() =>
-                          setAction({
-                            type: 'DISPATCH_SHIPMENT',
-                            shipmentId: shipment.id,
-                          })
-                        }
-                      >
-                        Dispatch shipment
-                      </Button>
-                    )}
-                    {warehouse && shipment.status === 'DISPATCHED' && (
-                      <Button
-                        size="sm"
-                        disabled={!ready}
-                        onClick={() =>
-                          setAction({
-                            type: 'CONFIRM_DELIVERY',
-                            shipmentId: shipment.id,
-                          })
-                        }
-                      >
-                        Confirm delivery
-                      </Button>
-                    )}
+                    {may('DISPATCH_SHIPMENT') &&
+                      nextStatus(
+                        SHIPMENT_LIFECYCLE,
+                        'dispatch',
+                        shipment.status,
+                      ) && (
+                        <Button
+                          size="sm"
+                          disabled={!ready}
+                          onClick={() =>
+                            setAction({
+                              type: 'DISPATCH_SHIPMENT',
+                              shipmentId: shipment.id,
+                            })
+                          }
+                        >
+                          Dispatch shipment
+                        </Button>
+                      )}
+                    {may('CONFIRM_DELIVERY') &&
+                      nextStatus(
+                        SHIPMENT_LIFECYCLE,
+                        'confirm some dispatched units',
+                        shipment.status,
+                      ) && (
+                        <Button
+                          size="sm"
+                          disabled={!ready}
+                          onClick={() =>
+                            setAction({
+                              type: 'CONFIRM_DELIVERY',
+                              shipmentId: shipment.id,
+                            })
+                          }
+                        >
+                          Confirm delivery
+                        </Button>
+                      )}
+                    {may('CORRECT_DELIVERY') &&
+                      nextStatus(
+                        SHIPMENT_LIFECYCLE,
+                        'correct an overstated delivery',
+                        shipment.status,
+                      ) &&
+                      shipment.lines.some(
+                        (line) => line.delivered > line.returned,
+                      ) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!ready}
+                          onClick={() =>
+                            setAction({
+                              type: 'CORRECT_DELIVERY',
+                              shipmentId: shipment.id,
+                            })
+                          }
+                        >
+                          Correct delivered quantity
+                        </Button>
+                      )}
                   </div>
                   <div className="rounded-lg border">
                     <Table
@@ -322,7 +358,7 @@ export function OrderDetailPage() {
             )}
             {dispatched && (
               <div className="flex flex-wrap gap-3 p-5">
-                {warehouse &&
+                {may('RECORD_RETURN') &&
                   lines.some((line) => line.delivered > line.returned) && (
                     <Button
                       variant="outline"
@@ -332,7 +368,7 @@ export function OrderDetailPage() {
                       Record a return
                     </Button>
                   )}
-                {commercial && (
+                {may('CORRECT_DISPATCHED_ORDER') && (
                   <Button
                     variant="outline"
                     disabled={!ready}
