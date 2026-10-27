@@ -31,6 +31,7 @@ import {
 } from '@/features/crm/ui';
 import { AccountPanel } from '@/features/crm/account-panel';
 import { ActivityDialog } from '@/features/crm/activity-dialog';
+import { can } from '@crm/shared/rulebook';
 
 export function CustomersPage() {
   const { data, actor } = useCrm();
@@ -261,7 +262,7 @@ export function CustomerDetailPage() {
     );
   const summary = data.summary;
   const customer = summary.customer;
-  const manage = ['ADMIN', 'SALES', 'ACCOUNTS'].includes(actor.role);
+  const manage = can(actor.role, 'UPDATE_CUSTOMER');
   return (
     <div className="space-y-6">
       <PageHeader
@@ -277,12 +278,12 @@ export function CustomerDetailPage() {
             </Link>
           </Button>
         )}
-        {['ADMIN', 'ACCOUNTS'].includes(actor.role) && (
+        {can(actor.role, 'RECEIVE_CUSTOMER_PAYMENT') && (
           <Button variant="outline" onClick={() => setPaymentOpen(true)}>
             Record payment
           </Button>
         )}
-        {['ADMIN', 'SALES'].includes(actor.role) && (
+        {can(actor.role, 'PUNCH_ORDER') && (
           <Button asChild>
             <Link to={`/orders/new?customer=${id}`}>
               <Plus />
@@ -322,7 +323,7 @@ export function CustomerDetailPage() {
               title="No orders yet"
               description="Create this customer's first sales order."
             >
-              {['ADMIN', 'SALES'].includes(actor.role) && (
+              {can(actor.role, 'PUNCH_ORDER') && (
                 <Button asChild>
                   <Link to={`/orders/new?customer=${id}`}>
                     <ShoppingBag />

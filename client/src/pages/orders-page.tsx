@@ -29,6 +29,7 @@ import {
   useTablePage,
   WorkspaceState,
 } from '@/features/crm/ui';
+import { can } from '@crm/shared/rulebook';
 
 export function OrdersPage() {
   const { data, actor } = useCrm();
@@ -50,7 +51,7 @@ export function OrdersPage() {
         title="Sales orders"
         description="Create and manage customer orders from draft to delivery."
       >
-        {['ADMIN', 'SALES'].includes(actor.role) && (
+        {can(actor.role, 'PUNCH_ORDER') && (
           <Button asChild>
             <Link to="/orders/new">
               <Plus />
@@ -106,7 +107,7 @@ export function OrdersPage() {
                   : 'Choose a customer and add products to create a sales order.'
               }
             >
-              {['ADMIN', 'SALES'].includes(actor.role) &&
+              {can(actor.role, 'PUNCH_ORDER') &&
                 !search &&
                 !status &&
                 !fulfillment && (
@@ -139,7 +140,7 @@ export function OrderFormPage() {
   if (!data || (id && !record.data && !record.error))
     return <Loading label="Loading order form…" />;
   if (id && record.error) return <ErrorNotice message={record.error} />;
-  if (!['ADMIN', 'SALES'].includes(actor.role))
+  if (!can(actor.role, id ? 'EDIT_ORDER' : 'PUNCH_ORDER'))
     return <Empty title="You do not have permission to manage orders" />;
   const order = id ? record.data : null;
   if (
