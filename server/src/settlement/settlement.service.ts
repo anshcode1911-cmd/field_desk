@@ -35,9 +35,16 @@ export class SettlementService {
     );
   }
 
-  /** ACC-002: m = received, a = allocated, f = reserved as credit, u = m − a − f. */
+  /**
+   * ACC-002: m = received, a = allocated, f = reserved as credit, u = m − a − f.
+   * A receipt moved to another customer (FDSK-169) keeps its record but no
+   * longer counts as received here.
+   */
   receipt(receipt: Receipt) {
-    const received = receipt.amount_paise;
+    const received = safe(
+      receipt.amount_paise -
+        this.accountsRepository.movedOutFromReceipt(receipt.id),
+    );
     const allocated = this.accountsRepository.allocatedFromReceipt(receipt.id);
     const reserved = this.creditsRepository.reservedFromReceipt(receipt.id);
     return {
