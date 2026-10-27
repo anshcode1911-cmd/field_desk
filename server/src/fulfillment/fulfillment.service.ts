@@ -4,13 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js';
 import { AccountsRepository } from '../accounts/accounts.repository.js';
-import { AccountsService } from '../accounts/accounts.service.js';
-import { RewardsService } from '../rewards/rewards.service.js';
 import { CatalogRepository } from '../catalog/catalog.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import {
-  authorize,
   useOrder,
   fail,
   safe,
@@ -24,13 +21,10 @@ export class FulfillmentService {
     private readonly ordersRepository: OrdersRepository,
     private readonly fulfillmentRepository: FulfillmentRepository,
     private readonly accountsRepository: AccountsRepository,
-    private readonly accountsService: AccountsService,
-    private readonly rewardsService: RewardsService,
     private readonly catalogRepository: CatalogRepository,
     private readonly returnsRepository: ReturnsRepository,
   ) {}
   load(c: Context, p: Payload<'START_LOADING'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     if (
       order.status !== 'APPROVED' ||
@@ -82,7 +76,6 @@ export class FulfillmentService {
     }
   }
   dispatch(c: Context, p: Payload<'DISPATCH_SHIPMENT'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipment = this.fulfillmentRepository.findForOrder(
       p.shipmentId,
@@ -106,7 +99,6 @@ export class FulfillmentService {
       });
   }
   deliver(c: Context, p: Payload<'CONFIRM_DELIVERY'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipment = this.fulfillmentRepository.findForOrder(
       p.shipmentId,
@@ -161,13 +153,8 @@ export class FulfillmentService {
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
         status: 'DELIVERED',
       });
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   correct(c: Context, p: Payload<'CORRECT_DISPATCHED_ORDER'>) {
-    authorize(c, 'KAM', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipments = this.fulfillmentRepository.dispatchedForOrderDocuments(
       order.id,
@@ -356,10 +343,6 @@ export class FulfillmentService {
         });
       }
     }
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   forOrder(orderId: string) {
     if (!this.ordersRepository.findById(orderId))

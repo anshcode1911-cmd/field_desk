@@ -11,7 +11,7 @@ Owns commercial orders, immutable line revisions, revision approvals and rejecti
 
 ## Coordination
 
-Catalog supplies product reference data. Fulfillment and Returns supply physical progress for detail views. Edits invalidate pending loading documents and compensate old locked entitlement. Approval and cancellation invoke Rewards to refresh entitlement. Actions supplies authorization context, idempotency, transaction boundaries, and versions. Order detail includes related records, while their storage and mutations remain owned by the corresponding modules.
+Catalog supplies product reference data. Fulfillment and Returns supply physical progress for detail views. Edits invalidate pending loading documents and compensate old locked entitlement. Approval posts locked entitlement; cancellation is followed by the rulebook's reward refresh. Actions supplies authorization context, idempotency, transaction boundaries, and versions. Order detail includes related records, while their storage and mutations remain owned by the corresponding modules.
 
 ## Related
 

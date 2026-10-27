@@ -7,8 +7,6 @@ import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
 import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
 import { CreditsRepositoryModule } from '../credits/credits.repository.js';
 import { RewardsRepositoryModule } from '../rewards/rewards.repository.js';
-import { AccountsModule } from '../accounts/accounts.module.js';
-import { RewardsModule } from '../rewards/rewards.module.js';
 import { CustomersRepositoryModule } from '../customers/customers.repository.js';
 @Module({
   imports: [
@@ -18,8 +16,6 @@ import { CustomersRepositoryModule } from '../customers/customers.repository.js'
     AccountsRepositoryModule,
     CreditsRepositoryModule,
     RewardsRepositoryModule,
-    AccountsModule,
-    RewardsModule,
     CustomersRepositoryModule,
   ],
   controllers: [ReturnsController],

@@ -23,6 +23,11 @@
       "types": "./dist/crm.d.ts",
       "import": "./dist/crm.js",
       "default": "./dist/crm.js"
+    },
+    "./rulebook": {
+      "types": "./dist/rulebook.d.ts",
+      "import": "./dist/rulebook.js",
+      "default": "./dist/rulebook.js"
     }
   },
   "files": [

@@ -11,7 +11,7 @@ Owns reward entitlement, point ledger buckets, redemption records, and recovery 
 
 ## Coordination
 
-Orders, Fulfillment, and Accounts call `refresh` when approval, delivery, or cash attribution changes; Returns also refreshes after adjustments. The service reads commercial lines, returned quantities, and qualifying cash from their owners. Accounts uses `balances` for its summary instead of reconstructing point buckets separately. Commands use the Actions transaction and retain compensating postings when entitlement changes.
+The rulebook's `refresh rewards` reaction runs `refresh` after cancellation, delivery, returns, corrections, and cash attribution. The service reads commercial lines, returned quantities, and qualifying cash from their owners. Accounts uses `balances` for its summary instead of reconstructing point buckets separately. Commands use the Actions transaction and retain compensating postings when entitlement changes.
 
 ## Related
 

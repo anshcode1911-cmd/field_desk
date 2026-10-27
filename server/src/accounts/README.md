@@ -11,7 +11,7 @@ Owns receivable entries, customer cash receipts, payment allocations, and accoun
 
 ## Coordination
 
-`ActionsService` invokes `receive` and `allocate`. Fulfillment and Returns call `allocateCash` when physical activity changes charge capacity. Rewards owns point balances and entitlement refresh; Credits owns credit funding and settlement. The account summary combines those sources without copying their balances into another table. Command writes join the action transaction; `accounts()` wraps its multi-customer read in a transaction.
+`ActionsService` invokes `receive` and `allocate`, and runs `allocateCash` as the rulebook's `allocate free cash` reaction after the actions WF-002 lists. Rewards owns point balances and entitlement refresh; Credits owns credit funding and settlement. The account summary combines those sources without copying their balances into another table. Command writes join the action transaction; `accounts()` wraps its multi-customer read in a transaction.
 
 ## Related
 

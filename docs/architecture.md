@@ -8,7 +8,8 @@ Backend domains keep their implementation together. The [backend module index](.
 
 - **Models** define typed entities and value objects, schema mappings, and local invariants. Order transitions, deliverable/returnable quantities, credit availability, cash-funded reward rounding, and charge balances have explicit model behavior.
 - **Repositories** own database reads and writes using typed Drizzle tables, joins, predicates, aggregates, inserts, and updates. Repository modules expose persistence to cooperating domains without importing their business services or introducing circular service dependencies.
-- **Services** authorize operations and coordinate domain work. Cash allocation belongs to Accounts; reward entitlement updates and point balances belong to Rewards. Fulfillment and Returns call those services when a physical operation changes settlement or entitlement.
+- **Rulebook** (`shared/src/rulebook.ts`) declares, per action, the permitted roles, canonical rule ids, a plain-English outcome, and the follow-up policies. `ActionsService` enforces it; the client reads it to show permitted actions.
+- **Services** coordinate domain work. Cash allocation belongs to Accounts; reward entitlement updates and point balances belong to Rewards. The dispatcher runs those policies after the actions whose rulebook entry lists them.
 - **Controllers** handle HTTP parameters, runtime validation, and authenticated actors. Domain mutations retain the common action contract; domain read controllers expose their own records.
 
 Use only the layers a capability needs. Catalog serves repository reads directly, Workspace returns static metadata without a repository or service, and Health keeps its single database readiness query in a service. These modules do not need the full business-module file layout.
@@ -26,7 +27,7 @@ client/src/
   features/crm/   Record forms, account tables, and CRM data access
   store/          In-memory Zustand session state
   lib/            HTTP client and utilities
-shared/src/       Zod request contracts, public response types, roles
+shared/src/       Zod request contracts, public response types, roles, rulebook
 ```
 
 Shared builds to an ESM package with declarations; both applications import its public package export. There are no source aliases between packages. NestJS is compiled with TypeScript decorator metadata, including in tests and development.

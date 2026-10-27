@@ -7,11 +7,9 @@ import { ReturnsRepository } from '../returns/returns.repository.js';
 import { AccountsRepository } from '../accounts/accounts.repository.js';
 import { CreditsRepository } from '../credits/credits.repository.js';
 import { RewardsRepository } from '../rewards/rewards.repository.js';
-import { AccountsService } from '../accounts/accounts.service.js';
-import { RewardsService } from '../rewards/rewards.service.js';
 import { CustomersRepository } from '../customers/customers.repository.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
-import { authorize, useOrder, fail, safe, distinct } from '../common/domain.js';
+import { useOrder, fail, safe, distinct } from '../common/domain.js';
 
 @Injectable()
 export class ReturnsService {
@@ -22,12 +20,9 @@ export class ReturnsService {
     private readonly accountsRepository: AccountsRepository,
     private readonly creditsRepository: CreditsRepository,
     private readonly rewardsRepository: RewardsRepository,
-    private readonly accountsService: AccountsService,
-    private readonly rewardsService: RewardsService,
     private readonly customersRepository: CustomersRepository,
   ) {}
   returnItems(c: Context, p: Payload<'RECORD_RETURN'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     distinct(p.items.map((item) => item.shipmentLineId));
     const returned = p.items.map((item) => {
@@ -232,10 +227,6 @@ export class ReturnsService {
             amount_paise: amount,
           });
     }
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   forCustomer(customerId: string) {
     if (!this.customersRepository.findById(customerId))

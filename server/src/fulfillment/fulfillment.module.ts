@@ -4,8 +4,6 @@ import { FulfillmentController } from './fulfillment.controller.js';
 import { OrdersRepositoryModule } from '../orders/orders.repository.js';
 import { FulfillmentRepositoryModule } from '../fulfillment/fulfillment.repository.js';
 import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
-import { AccountsModule } from '../accounts/accounts.module.js';
-import { RewardsModule } from '../rewards/rewards.module.js';
 import { CatalogRepositoryModule } from '../catalog/catalog.repository.js';
 import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
 @Module({
@@ -13,8 +11,6 @@ import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
     OrdersRepositoryModule,
     FulfillmentRepositoryModule,
     AccountsRepositoryModule,
-    AccountsModule,
-    RewardsModule,
     CatalogRepositoryModule,
     ReturnsRepositoryModule,
   ],

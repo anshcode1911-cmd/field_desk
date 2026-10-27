@@ -3,6 +3,17 @@ import { randomUUID, createHash } from 'node:crypto';
 import type { User } from '@crm/shared';
 import type { ActionEnvelope, ActionResult } from '@crm/shared/crm';
 import { BUSINESS_TERMS_VERSION } from '@crm/shared/crm';
+import {
+  RULEBOOK,
+  REACTION_ORDER,
+  can,
+  type Reaction,
+} from '@crm/shared/rulebook';
+import {
+  REACTION_HANDLERS,
+  runHandler,
+  type DomainServices,
+} from './handlers.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { ActionsRepository } from '../actions/actions.repository.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
@@ -41,17 +52,28 @@ export class ActionsService {
     private readonly actionsRepository: ActionsRepository,
     private readonly ordersRepository: OrdersRepository,
     private readonly customersRepository: CustomersRepository,
-    private readonly customersService: CustomersService,
-    private readonly ordersService: OrdersService,
-    private readonly fulfillmentService: FulfillmentService,
-    private readonly returnsService: ReturnsService,
+    customersService: CustomersService,
+    ordersService: OrdersService,
+    fulfillmentService: FulfillmentService,
+    returnsService: ReturnsService,
     private readonly accountsService: AccountsService,
-    private readonly rewardsService: RewardsService,
-    private readonly creditsService: CreditsService,
+    rewardsService: RewardsService,
+    creditsService: CreditsService,
     private readonly auditRepository: AuditRepository,
     private readonly auditService: AuditService,
     private readonly database: DatabaseService,
-  ) {}
+  ) {
+    this.services = {
+      customers: customersService,
+      orders: ordersService,
+      fulfillment: fulfillmentService,
+      returns: returnsService,
+      accounts: accountsService,
+      rewards: rewardsService,
+      credits: creditsService,
+    };
+  }
+  private readonly services: DomainServices;
   execute(envelope: ActionEnvelope, requester: User): ActionResult {
     return this.database.db.transaction(
       () => {
@@ -151,77 +173,14 @@ export class ActionsService {
               stage: 'request',
               explanation: `${actor.name} (${actor.role}) requested ${envelope.command.type} against version ${aggregate.version}. Business terms ${BUSINESS_TERMS_VERSION}.`,
             });
-            switch (envelope.command.type) {
-              case 'UPDATE_CUSTOMER':
-                this.customersService.updateCustomer(
-                  c,
-                  envelope.command.payload,
-                );
-                break;
-              case 'PUNCH_ORDER':
-                this.ordersService.punch(c, envelope.command.payload);
-                break;
-              case 'EDIT_ORDER':
-                this.ordersService.edit(c, envelope.command.payload);
-                break;
-              case 'SUBMIT_ORDER':
-                this.ordersService.submit(c, envelope.command.payload);
-                break;
-              case 'APPROVE_ORDER':
-                this.ordersService.approve(c, envelope.command.payload);
-                break;
-              case 'REJECT_ORDER':
-                this.ordersService.reject(c, envelope.command.payload);
-                break;
-              case 'START_LOADING':
-                this.fulfillmentService.load(c, envelope.command.payload);
-                break;
-              case 'DISPATCH_SHIPMENT':
-                this.fulfillmentService.dispatch(c, envelope.command.payload);
-                break;
-              case 'CONFIRM_DELIVERY':
-                this.fulfillmentService.deliver(c, envelope.command.payload);
-                break;
-              case 'CANCEL_REMAINDER':
-                this.ordersService.cancel(c, envelope.command.payload);
-                break;
-              case 'RECORD_RETURN':
-                this.returnsService.returnItems(c, envelope.command.payload);
-                break;
-              case 'RECEIVE_CUSTOMER_PAYMENT':
-                this.accountsService.receive(c, envelope.command.payload);
-                break;
-              case 'ALLOCATE_PAYMENT':
-                this.accountsService.allocate(c, envelope.command.payload);
-                break;
-              case 'REDEEM_POINTS':
-                this.rewardsService.redeem(c, envelope.command.payload);
-                break;
-              case 'ISSUE_CREDIT_NOTE':
-                this.creditsService.issueCredit(c, envelope.command.payload);
-                break;
-              case 'APPLY_CREDIT_NOTE':
-                this.creditsService.applyCredit(c, envelope.command.payload);
-                break;
-              case 'REFUND_CREDIT_NOTE':
-                this.creditsService.refundCredit(c, envelope.command.payload);
-                break;
-              case 'REVERSE_CREDIT_APPLICATION':
-                this.creditsService.reverseCreditApplication(
-                  c,
-                  envelope.command.payload,
-                );
-                break;
-              case 'REVERSE_CREDIT_REFUND':
-                this.creditsService.reverseCreditRefund(
-                  c,
-                  envelope.command.payload,
-                );
-                break;
-              case 'CORRECT_DISPATCHED_ORDER':
-                this.fulfillmentService.correct(c, envelope.command.payload);
-                break;
-            }
+            const rule = RULEBOOK[envelope.command.type];
+            if (!can(actor.role, envelope.command.type))
+              fail('FORBIDDEN', 'This operation requires a different role');
+            runHandler(this.services, c, envelope.command);
+            const reactions: readonly Reaction[] = rule.then;
+            for (const reaction of REACTION_ORDER)
+              if (reactions.includes(reaction))
+                REACTION_HANDLERS[reaction](this.services, c);
             this.customersRepository.updateCustomer(c, c.customerId, {
               version:
                 this.accountsService.summary(c.customerId).customer.version + 1,

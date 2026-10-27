@@ -11,7 +11,7 @@ Owns physical shipments, loading quantities, dispatch evidence, incremental deli
 
 ## Coordination
 
-Orders owns commercial revisions and approvals. Delivery appends an Accounts charge and invokes cash allocation and reward refresh. A correction retains the original physical document and records its supporting facts. Returns owns goods coming back after delivery. Mutating methods receive the Actions context and run inside its transaction; loading or dispatch alone does not create a receivable.
+Orders owns commercial revisions and approvals. Delivery appends an Accounts charge; the rulebook then runs cash allocation and reward refresh. A correction retains the original physical document and records its supporting facts. Returns owns goods coming back after delivery. Mutating methods receive the Actions context and run inside its transaction; loading or dispatch alone does not create a receivable.
 
 ## Related
 

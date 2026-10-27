@@ -6,7 +6,6 @@ import { OrdersRepositoryModule } from '../orders/orders.repository.js';
 import { CatalogRepositoryModule } from '../catalog/catalog.repository.js';
 import { FulfillmentRepositoryModule } from '../fulfillment/fulfillment.repository.js';
 import { RewardsRepositoryModule } from '../rewards/rewards.repository.js';
-import { RewardsModule } from '../rewards/rewards.module.js';
 import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
 import { AuditRepositoryModule } from '../audit/audit.repository.js';
 @Module({
@@ -16,7 +15,6 @@ import { AuditRepositoryModule } from '../audit/audit.repository.js';
     CatalogRepositoryModule,
     FulfillmentRepositoryModule,
     RewardsRepositoryModule,
-    RewardsModule,
     ReturnsRepositoryModule,
     AuditRepositoryModule,
   ],
