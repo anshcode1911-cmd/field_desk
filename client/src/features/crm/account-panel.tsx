@@ -47,10 +47,10 @@ export function AccountPanel({
     })[String(kind) as 'DELIVERY'] ?? String(kind);
   const customerName = (id: unknown) =>
     data?.customers.find((row) => row.id === id)?.name ?? 'another customer';
-  const transferOf = (id: unknown) =>
-    ledger.transfers.find(
-      (row) => row.receipt_id === id || row.new_receipt_id === id,
-    );
+  const movedOutOf = (id: unknown) =>
+    ledger.transfers.find((row) => row.receipt_id === id);
+  const movedInto = (id: unknown) =>
+    ledger.transfers.find((row) => row.new_receipt_id === id);
   const reversed = (
     rows: Array<Record<string, unknown>>,
     id: unknown,
@@ -184,19 +184,24 @@ export function AccountPanel({
             (ledger.receipts.length ? (
               <Table columns={['Received', 'Payment reference', 'Amount', '']}>
                 {[...ledger.receipts].reverse().map((row) => {
-                  const transfer = transferOf(row.id);
-                  const movedOut = transfer?.receipt_id === row.id;
+                  const out = movedOutOf(row.id);
+                  const into = movedInto(row.id);
+                  const movedOut = Boolean(out);
                   return (
                     <tr key={String(row.id)}>
                       <td>{date(row.created_at)}</td>
                       <td className="font-medium">
                         {String(row.reference)}
-                        {transfer && (
+                        {into && (
                           <span className="block text-xs font-normal text-muted-foreground">
-                            {movedOut
-                              ? `Moved to ${customerName(transfer.to_customer_id)}`
-                              : `Moved from ${customerName(transfer.from_customer_id)}`}{' '}
-                            · {String(transfer.reason)}
+                            Moved from {customerName(into.from_customer_id)} ·{' '}
+                            {String(into.reason)}
+                          </span>
+                        )}
+                        {out && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            Moved to {customerName(out.to_customer_id)} ·{' '}
+                            {String(out.reason)}
                           </span>
                         )}
                       </td>

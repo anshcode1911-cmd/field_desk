@@ -203,6 +203,7 @@ export function ActivityDialog({
     if (type === 'MOVE_PAYMENT') {
       payload.receiptId = entryId;
       payload.toCustomerId = form.get('toCustomer');
+      if (form.get('withdrawCredit')) payload.creditFunding = 'WITHDRAW';
     }
     try {
       if (type === 'RECORD_RETURN') payload.feePaise = paise(form.get('fee'));
@@ -416,6 +417,19 @@ export function ActivityDialog({
                       ))}
                   </NativeSelect>
                 </Field>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="withdrawCredit"
+                    className="mt-1"
+                  />
+                  <span>
+                    If this payment funds unused credit for{' '}
+                    {summary.customer.name}, withdraw that credit. Credit cannot
+                    move between customers, so the move is refused without this
+                    confirmation.
+                  </span>
+                </label>
               </>
             )}
             {type === 'RECORD_RETURN' && (

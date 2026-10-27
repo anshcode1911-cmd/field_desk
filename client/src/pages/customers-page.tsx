@@ -141,7 +141,10 @@ export function CustomerFormPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const customer = id ? record.data?.summary.customer : undefined;
-  const allowed = ['ADMIN', 'SALES', 'ACCOUNTS'].includes(actor.role);
+  // Editing is the UPDATE_CUSTOMER action; creation is a separate endpoint.
+  const allowed = id
+    ? can(actor.role, 'UPDATE_CUSTOMER')
+    : ['ADMIN', 'SALES', 'ACCOUNTS'].includes(actor.role);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
