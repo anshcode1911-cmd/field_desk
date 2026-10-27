@@ -162,6 +162,71 @@ export const RULEBOOK = {
   },
 } as const satisfies Record<CommandType, ActionRule>;
 
+/**
+ * A lifecycle is a first-hit decision table. Read each row as
+ * "OPERATION from any of these statuses leads to STATUS". The first row
+ * whose operation and starting status match decides; when no row matches,
+ * the operation is not allowed in that status.
+ */
+export interface Lifecycle<Status extends string, Operation extends string> {
+  readonly rule: string;
+  readonly rows: ReadonlyArray<
+    readonly [operation: Operation, from: readonly Status[], to: Status]
+  >;
+}
+
+export type OrderStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'REAPPROVAL_REQUIRED'
+  | 'CANCELLED';
+const OPEN_ORDER = [
+  'DRAFT',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'REAPPROVAL_REQUIRED',
+] as const satisfies OrderStatus[];
+
+export const ORDER_LIFECYCLE = {
+  rule: 'ORD-005',
+  rows: [
+    ['edit', ['APPROVED', 'REAPPROVAL_REQUIRED'], 'REAPPROVAL_REQUIRED'],
+    ['edit', ['DRAFT', 'PENDING', 'REJECTED'], 'DRAFT'],
+    ['submit', ['DRAFT', 'REJECTED'], 'PENDING'],
+    ['submit', ['REAPPROVAL_REQUIRED'], 'REAPPROVAL_REQUIRED'],
+    ['approve', ['PENDING', 'REAPPROVAL_REQUIRED'], 'APPROVED'],
+    ['reject', ['PENDING', 'REAPPROVAL_REQUIRED'], 'REJECTED'],
+    ['cancel every unit, none dispatched', OPEN_ORDER, 'CANCELLED'],
+    ['record additional dispatched goods', ['APPROVED'], 'APPROVED'],
+  ],
+} as const satisfies Lifecycle<OrderStatus, string>;
+
+export type ShipmentStatus = 'LOADING' | 'DISPATCHED' | 'DELIVERED' | 'VOIDED';
+export const SHIPMENT_LIFECYCLE = {
+  rule: 'FUL-004..006',
+  rows: [
+    ['dispatch', ['LOADING'], 'DISPATCHED'],
+    ['confirm some dispatched units', ['DISPATCHED'], 'DISPATCHED'],
+    ['confirm the last undelivered units', ['DISPATCHED'], 'DELIVERED'],
+    ['void after an order change', ['LOADING'], 'VOIDED'],
+  ],
+} as const satisfies Lifecycle<ShipmentStatus, string>;
+
+/** The status `operation` leads to from `from`, or undefined if not allowed. */
+export function nextStatus<L extends Lifecycle<string, string>>(
+  lifecycle: L,
+  operation: L['rows'][number][0],
+  from: string,
+): L['rows'][number][2] | undefined {
+  const row = lifecycle.rows.find(
+    ([op, starts]) => op === operation && starts.includes(from),
+  );
+  return row?.[2];
+}
+
 /** True when `role` may perform `action`. */
 export function can(role: Role, action: CommandType): boolean {
   const who: readonly Role[] = RULEBOOK[action].who;

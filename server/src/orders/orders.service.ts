@@ -15,8 +15,10 @@ import {
   fail,
   safe,
   distinct,
+  transition,
 } from '../common/domain.js';
 import { fulfillmentState, OrderModel } from './orders.model.js';
+import { ORDER_LIFECYCLE, SHIPMENT_LIFECYCLE } from '@crm/shared/rulebook';
 
 @Injectable()
 export class OrdersService {
@@ -106,13 +108,23 @@ export class OrdersService {
     }
     for (const shipment of this.fulfillmentRepository.loadingForOrder(order.id))
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
-        status: 'VOIDED',
+        status: transition(
+          SHIPMENT_LIFECYCLE,
+          'void after an order change',
+          shipment.status,
+          'SHIPMENT_STATE',
+          'Only loading batches can be voided',
+        ),
       });
     this.ordersRepository.updateOrder(c, order.id, {
       current_revision: order.current_revision + 1,
-      status: ['APPROVED', 'REAPPROVAL_REQUIRED'].includes(order.status)
-        ? 'REAPPROVAL_REQUIRED'
-        : 'DRAFT',
+      status: transition(
+        ORDER_LIFECYCLE,
+        'edit',
+        order.status,
+        'ORDER_STATE',
+        'This order cannot be edited',
+      ),
     });
     for (const line of existing) {
       const locked = this.rewardsRepository.lockedForLine(line.line_key);
@@ -131,17 +143,26 @@ export class OrdersService {
   }
   submit(c: Context, p: Payload<'SUBMIT_ORDER'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
-    new OrderModel(order).assertSubmittable();
     this.ordersRepository.updateOrder(c, order.id, {
-      status:
-        order.status === 'REAPPROVAL_REQUIRED'
-          ? 'REAPPROVAL_REQUIRED'
-          : 'PENDING',
+      status: transition(
+        ORDER_LIFECYCLE,
+        'submit',
+        order.status,
+        'ORDER_STATE',
+        'This order is not awaiting submission',
+      ),
     });
   }
   approve(c: Context, p: Payload<'APPROVE_ORDER'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
-    new OrderModel(order).assertReviewable(p.revision, 'APPROVED');
+    const status = transition(
+      ORDER_LIFECYCLE,
+      'approve',
+      order.status,
+      'ORDER_STATE',
+      'Submit the current revision for approval first',
+    );
+    new OrderModel(order).assertCurrentRevision(p.revision, 'APPROVED');
     this.ordersRepository.insertApproval(c, {
       id: randomUUID(),
       order_id: order.id,
@@ -151,7 +172,7 @@ export class OrdersService {
       reason: 'Commercial approval',
       created_at: c.now,
     });
-    this.ordersRepository.updateOrder(c, order.id, { status: 'APPROVED' });
+    this.ordersRepository.updateOrder(c, order.id, { status });
     for (const line of this.ordersRepository.currentLines(
       order.id,
       order.current_revision,
@@ -174,7 +195,14 @@ export class OrdersService {
   }
   reject(c: Context, p: Payload<'REJECT_ORDER'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
-    new OrderModel(order).assertReviewable(p.revision, 'REJECTED');
+    const status = transition(
+      ORDER_LIFECYCLE,
+      'reject',
+      order.status,
+      'ORDER_STATE',
+      'The order is not awaiting approval',
+    );
+    new OrderModel(order).assertCurrentRevision(p.revision, 'REJECTED');
     this.ordersRepository.insertApproval(c, {
       id: randomUUID(),
       order_id: order.id,
@@ -184,7 +212,7 @@ export class OrdersService {
       reason: p.reason,
       created_at: c.now,
     });
-    this.ordersRepository.updateOrder(c, order.id, { status: 'REJECTED' });
+    this.ordersRepository.updateOrder(c, order.id, { status });
   }
   cancel(c: Context, p: Payload<'CANCEL_REMAINDER'>) {
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
@@ -201,7 +229,13 @@ export class OrdersService {
     let canceledTotal = 0;
     for (const shipment of this.fulfillmentRepository.loadingForOrder(order.id))
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
-        status: 'VOIDED',
+        status: transition(
+          SHIPMENT_LIFECYCLE,
+          'void after an order change',
+          shipment.status,
+          'SHIPMENT_STATE',
+          'Only loading batches can be voided',
+        ),
       });
     for (const line of lines) {
       const sent = this.fulfillmentRepository.dispatchedForLine(line.line_key);
@@ -237,7 +271,15 @@ export class OrdersService {
       ) &&
       !this.fulfillmentRepository.dispatchedForOrder(order.id)
     )
-      this.ordersRepository.updateOrder(c, order.id, { status: 'CANCELLED' });
+      this.ordersRepository.updateOrder(c, order.id, {
+        status: transition(
+          ORDER_LIFECYCLE,
+          'cancel every unit, none dispatched',
+          order.status,
+          'ORDER_STATE',
+          'This order cannot be canceled',
+        ),
+      });
   }
   detail(id: string): OrderDetail {
     const order = this.ordersRepository.findById(id);

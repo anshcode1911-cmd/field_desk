@@ -6,7 +6,7 @@ The repository uses sibling pnpm packages for the React client, NestJS API, and 
 
 Backend domains keep their implementation together. The [backend module index](../server/src/README.md) links to a README in every feature and supporting directory, describing its ownership, implementation files, collaborators, and transaction boundary.
 
-- **Models** define typed entities and value objects, schema mappings, and local invariants. Order transitions, deliverable/returnable quantities, credit availability, cash-funded reward rounding, and charge balances have explicit model behavior.
+- **Models** define typed entities and value objects, schema mappings, and local invariants. Deliverable/returnable quantities, credit availability, cash-funded reward rounding, and charge balances have explicit model behavior. Order and shipment status changes come from the rulebook's first-hit lifecycle tables (`ORDER_LIFECYCLE`, `SHIPMENT_LIFECYCLE`), applied through `transition()`.
 - **Repositories** own database reads and writes using typed Drizzle tables, joins, predicates, aggregates, inserts, and updates. Repository modules expose persistence to cooperating domains without importing their business services or introducing circular service dependencies.
 - **Rulebook** (`shared/src/rulebook.ts`) declares, per action, the permitted roles, canonical rule ids, a plain-English outcome, and the follow-up policies. `ActionsService` enforces it; the client reads it to show permitted actions.
 - **Services** coordinate domain work. Cash allocation belongs to Accounts; reward entitlement updates and point balances belong to Rewards. The dispatcher runs those policies after the actions whose rulebook entry lists them.

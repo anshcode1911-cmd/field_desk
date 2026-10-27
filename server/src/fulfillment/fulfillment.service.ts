@@ -13,7 +13,9 @@ import {
   safe,
   distinct,
   DomainDecision as Decision,
+  transition,
 } from '../common/domain.js';
+import { ORDER_LIFECYCLE, SHIPMENT_LIFECYCLE } from '@crm/shared/rulebook';
 
 @Injectable()
 export class FulfillmentService {
@@ -81,8 +83,14 @@ export class FulfillmentService {
       p.shipmentId,
       order.id,
     );
-    if (!shipment || shipment.status !== 'LOADING')
-      fail('SHIPMENT_STATE', 'Select a shipment that is loading');
+    if (!shipment) fail('SHIPMENT_STATE', 'Select a shipment that is loading');
+    const status = transition(
+      SHIPMENT_LIFECYCLE,
+      'dispatch',
+      shipment.status,
+      'SHIPMENT_STATE',
+      'Select a shipment that is loading',
+    );
     if (
       order.status !== 'APPROVED' ||
       shipment.revision !== order.current_revision ||
@@ -90,7 +98,7 @@ export class FulfillmentService {
     )
       fail('APPROVAL_REQUIRED', 'The loading document needs current approval');
     this.fulfillmentRepository.updateShipment(c, shipment.id, {
-      status: 'DISPATCHED',
+      status,
       dispatched_at: c.now,
     });
     for (const line of this.fulfillmentRepository.linesForShipment(shipment.id))
@@ -104,8 +112,14 @@ export class FulfillmentService {
       p.shipmentId,
       order.id,
     );
-    if (!shipment || shipment.status !== 'DISPATCHED')
-      fail('SHIPMENT_STATE', 'Select an open dispatched shipment');
+    if (!shipment) fail('SHIPMENT_STATE', 'Select an open dispatched shipment');
+    transition(
+      SHIPMENT_LIFECYCLE,
+      'confirm some dispatched units',
+      shipment.status,
+      'SHIPMENT_STATE',
+      'Select an open dispatched shipment',
+    );
     distinct(p.items.map((item) => item.shipmentLineId));
     for (const item of p.items) {
       const line = this.fulfillmentRepository.findInShipment(
@@ -151,7 +165,13 @@ export class FulfillmentService {
     );
     if (!remaining)
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
-        status: 'DELIVERED',
+        status: transition(
+          SHIPMENT_LIFECYCLE,
+          'confirm the last undelivered units',
+          shipment.status,
+          'SHIPMENT_STATE',
+          'Select an open dispatched shipment',
+        ),
       });
   }
   correct(c: Context, p: Payload<'CORRECT_DISPATCHED_ORDER'>) {
@@ -263,7 +283,13 @@ export class FulfillmentService {
       order.id,
     )) {
       this.fulfillmentRepository.updateShipment(c, loading.id, {
-        status: 'VOIDED',
+        status: transition(
+          SHIPMENT_LIFECYCLE,
+          'void after an order change',
+          loading.status,
+          'SHIPMENT_STATE',
+          'Only loading batches can be voided',
+        ),
       });
     }
     this.fulfillmentRepository.insertCorrection(c, {
@@ -290,7 +316,13 @@ export class FulfillmentService {
       created_at: c.now,
     });
     this.ordersRepository.updateOrder(c, order.id, {
-      status: 'APPROVED',
+      status: transition(
+        ORDER_LIFECYCLE,
+        'record additional dispatched goods',
+        order.status,
+        'ORDER_STATE',
+        'Only approved orders can record additional dispatched goods',
+      ),
       current_revision: order.current_revision + 1,
     });
     this.fulfillmentRepository.insertShipment(c, {

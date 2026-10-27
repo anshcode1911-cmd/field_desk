@@ -5,6 +5,7 @@ import type {
   Customer,
 } from '@crm/shared/crm';
 import type { User } from '@crm/shared';
+import { nextStatus, type Lifecycle } from '@crm/shared/rulebook';
 export type Payload<T extends CrmCommand['type']> = Extract<
   CrmCommand,
   { type: T }
@@ -75,4 +76,19 @@ export function recordUpdate(
   after: unknown,
 ) {
   c.effects.push({ entity, operation: 'UPDATE', before, after });
+}
+/**
+ * Apply a lifecycle table row, failing with the table's rule id when the
+ * operation is not allowed from the current status.
+ */
+export function transition<L extends Lifecycle<string, string>>(
+  lifecycle: L,
+  operation: L['rows'][number][0],
+  from: string,
+  code: string,
+  message: string,
+): L['rows'][number][2] {
+  const to = nextStatus(lifecycle, operation, from);
+  if (to === undefined) fail(code, `${message} (${lifecycle.rule})`);
+  return to;
 }

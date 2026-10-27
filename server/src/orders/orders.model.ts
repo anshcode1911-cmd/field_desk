@@ -180,20 +180,7 @@ export class OrderModel {
     if (this.record.status === 'CANCELLED' || hasCancellation)
       fail('ORDER_CANCELLED', 'Canceled quantities cannot be edited');
   }
-  assertSubmittable() {
-    if (
-      !['DRAFT', 'REJECTED', 'REAPPROVAL_REQUIRED'].includes(this.record.status)
-    )
-      fail('ORDER_STATE', 'This order is not awaiting submission');
-  }
-  assertReviewable(revision: number, decision: 'APPROVED' | 'REJECTED') {
-    if (!['PENDING', 'REAPPROVAL_REQUIRED'].includes(this.record.status))
-      fail(
-        'ORDER_STATE',
-        decision === 'APPROVED'
-          ? 'Submit the current revision for approval first'
-          : 'The order is not awaiting approval',
-      );
+  assertCurrentRevision(revision: number, decision: 'APPROVED' | 'REJECTED') {
     if (revision !== this.record.current_revision)
       fail(
         'REVISION_CONFLICT',
