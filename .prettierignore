@@ -4,3 +4,4 @@ dist-test
 pnpm-lock.yaml
 server/drizzle/meta
 docs/solution/RULES.md
+docs/solution/chat-history.md
