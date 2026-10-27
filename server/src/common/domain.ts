@@ -15,6 +15,8 @@ export interface ActionContext {
   requester: User;
   now: string;
   customerId: string;
+  /** Other customers whose books the action also changes (FDSK-169). */
+  alsoAffects?: string[];
   orderId?: string;
   effects: ActionResult['effects'];
   references: Record<string, string>;
