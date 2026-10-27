@@ -1,4 +1,3 @@
-import { ChargeBalance } from './accounts.model.js';
 import { CreditBalance } from '../credits/credits.model.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -15,6 +14,7 @@ import { RewardsRepository } from '../rewards/rewards.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
 import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js';
 import { DatabaseService } from '../database/database.service.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import { useCustomer, fail, safe } from '../common/domain.js';
 
@@ -29,6 +29,7 @@ export class AccountsService {
     private readonly returnsRepository: ReturnsRepository,
     private readonly fulfillmentRepository: FulfillmentRepository,
     private readonly database: DatabaseService,
+    private readonly settlement: SettlementService,
   ) {}
   receive(c: Context, p: Payload<'RECEIVE_CUSTOMER_PAYMENT'>) {
     useCustomer(c, this.customersRepository.findById(p.customerId));
@@ -50,25 +51,16 @@ export class AccountsService {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
       c.customerId,
     )) {
-      let available =
-        receipt.amount_paise -
-        this.accountsRepository.allocatedFromReceipt(receipt.id) -
-        this.creditsRepository.reservedFromReceipt(receipt.id);
+      let available = this.settlement.receipt(receipt).free;
       if (available < 0)
         fail('RECEIPT_MISMATCH', 'Receipt allocations exceed captured funds');
       for (const charge of this.accountsRepository.chargesInDueOrder(
         c.customerId,
       )) {
         if (!available) break;
-        const face =
-          charge.amount_paise +
-          this.accountsRepository.adjustmentsForCharge(charge.id);
-        const cash = this.accountsRepository.cashForCharge(charge.id);
-        const credit = this.creditsRepository.appliedToCharge(charge.id);
-        const redeemed = this.rewardsRepository.redeemedForCharge(charge.id);
         const take = Math.min(
           available,
-          Math.max(0, face - cash - credit - redeemed),
+          Math.max(0, this.settlement.charge(charge).outstandingPaise),
         );
         if (take)
           this.accountsRepository.insertAllocation(c, {
@@ -90,22 +82,12 @@ export class AccountsService {
     const charges = this.accountsRepository
       .chargesForCustomer(customerId)
       .map((charge) => {
-        const remainingPaise =
-          charge.amount_paise +
-          this.accountsRepository.adjustmentsForCharge(charge.id);
-        const cashPaidPaise = this.accountsRepository.cashForCharge(charge.id);
-        const credit = this.creditsRepository.appliedToCharge(charge.id);
-        const redeemed = this.rewardsRepository.redeemedForCharge(charge.id);
+        const balance = this.settlement.charge(charge);
         return {
           ...charge,
-          remainingPaise,
-          cashPaidPaise,
-          outstandingPaise: new ChargeBalance(
-            remainingPaise,
-            cashPaidPaise,
-            credit,
-            redeemed,
-          ).outstandingPaise,
+          remainingPaise: balance.retainedPaise,
+          cashPaidPaise: balance.cashPaise,
+          outstandingPaise: balance.outstandingPaise,
         };
       });
     const credits = this.creditsRepository
@@ -129,11 +111,7 @@ export class AccountsService {
     const receipts = this.accountsRepository.receiptsByInsertion(customerId);
     const unappliedCashPaise = safe(
       receipts.reduce(
-        (sum, receipt) =>
-          sum +
-          receipt.amount_paise -
-          this.accountsRepository.allocatedFromReceipt(receipt.id) -
-          this.creditsRepository.reservedFromReceipt(receipt.id),
+        (sum, receipt) => sum + this.settlement.receipt(receipt).free,
         0,
       ),
     );

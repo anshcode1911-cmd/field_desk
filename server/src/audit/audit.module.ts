@@ -11,6 +11,7 @@ import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
 import { CreditsRepositoryModule } from '../credits/credits.repository.js';
 import { AuditRepositoryModule } from '../audit/audit.repository.js';
 import { ActionsRepositoryModule } from '../actions/actions.repository.js';
+import { SettlementModule } from '../settlement/settlement.module.js';
 @Module({
   imports: [
     AccountsRepositoryModule,
@@ -23,6 +24,7 @@ import { ActionsRepositoryModule } from '../actions/actions.repository.js';
     CreditsRepositoryModule,
     AuditRepositoryModule,
     ActionsRepositoryModule,
+    SettlementModule,
   ],
   controllers: [AuditController],
   providers: [AuditService],

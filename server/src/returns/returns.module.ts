@@ -6,7 +6,7 @@ import { FulfillmentRepositoryModule } from '../fulfillment/fulfillment.reposito
 import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
 import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
 import { CreditsRepositoryModule } from '../credits/credits.repository.js';
-import { RewardsRepositoryModule } from '../rewards/rewards.repository.js';
+import { SettlementModule } from '../settlement/settlement.module.js';
 import { CustomersRepositoryModule } from '../customers/customers.repository.js';
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { CustomersRepositoryModule } from '../customers/customers.repository.js'
     ReturnsRepositoryModule,
     AccountsRepositoryModule,
     CreditsRepositoryModule,
-    RewardsRepositoryModule,
+    SettlementModule,
     CustomersRepositoryModule,
   ],
   controllers: [ReturnsController],

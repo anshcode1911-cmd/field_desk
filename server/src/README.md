@@ -20,6 +20,7 @@
 | [Orders](orders/README.md)                    | Owns commercial orders, immutable line revisions, revision approvals and rejections, and canceled demand.                                |
 | [Returns](returns/README.md)                  | Owns physical return documents, their returned quantities and values, and coordination of the resulting financial adjustments.           |
 | [Rewards](rewards/README.md)                  | Owns reward entitlement, point ledger buckets, redemption records, and recovery of entitlement that has already been spent.              |
+| [Settlement](settlement/README.md)            | Owns shared charge and receipt settlement arithmetic and the WF-003 release of settlement above a reduced charge.                        |
 | [CLI scripts](scripts/README.md)              | Owns local administrator bootstrapping and repeat-safe development data creation.                                                        |
 | [Users](users/README.md)                      | Owns staff accounts, password storage, account creation, searchable staff lists, and administrator-controlled role and status changes.   |
 | [Workspace metadata](workspace/README.md)     | Exposes role-specific titles and descriptions for the Sales and KAM workspaces.                                                          |

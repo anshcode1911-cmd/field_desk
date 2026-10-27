@@ -16,6 +16,7 @@ import { ReturnsRepository } from '../returns/returns.repository.js';
 import { CreditsRepository } from '../credits/credits.repository.js';
 import { AuditRepository } from '../audit/audit.repository.js';
 import { ActionsRepository } from '../actions/actions.repository.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context } from '../common/domain.js';
 import { safe } from '../common/domain.js';
 interface AuditRecord {
@@ -47,6 +48,7 @@ export class AuditService {
     private readonly creditsRepository: CreditsRepository,
     private readonly auditRepository: AuditRepository,
     private readonly actionsRepository: ActionsRepository,
+    private readonly settlement: SettlementService,
   ) {}
   evidence(c: Context, table: string, row: AuditRecord) {
     const charge = row.charge_id
@@ -319,21 +321,16 @@ export class AuditService {
     for (const receipt of this.accountsRepository.receiptsByInsertion(
       customerId,
     )) {
-      const allocated = this.accountsRepository.allocatedFromReceipt(
-        receipt.id,
-      );
-      const reserved = this.creditsRepository.reservedFromReceipt(receipt.id);
+      const { received, allocated, reserved, free } =
+        this.settlement.receipt(receipt);
       const invalidPairs = this.accountsRepository.invalidReceiptAllocations(
         receipt.id,
       );
       check(
         `cash:${receipt.id}`,
         'Receipt cash is allocated or reserved at most once',
-        allocated >= 0 &&
-          reserved >= 0 &&
-          allocated + reserved <= receipt.amount_paise &&
-          invalidPairs === 0,
-        `Received ${receipt.amount_paise}; allocated ${allocated}; reserved ${reserved} paise.`,
+        allocated >= 0 && reserved >= 0 && free >= 0 && invalidPairs === 0,
+        `Received ${received}; allocated ${allocated}; reserved ${reserved} paise.`,
         [receipt.id],
       );
     }
