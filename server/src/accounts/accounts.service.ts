@@ -179,6 +179,7 @@ export class AccountsService {
     return {
       finance: this.accountsRepository.entriesForCustomer(customerId),
       receipts: this.accountsRepository.receiptsByInsertion(customerId),
+      transfers: this.accountsRepository.transfersForCustomer(customerId),
       allocations: this.accountsRepository.allocationsForCustomer(customerId),
       creditApplications:
         this.creditsRepository.applicationsForCustomer(customerId),

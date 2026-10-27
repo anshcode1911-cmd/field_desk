@@ -88,6 +88,48 @@ export const crmPaymentAllocations = sqliteTable(
   ],
 );
 
+/**
+ * FDSK-169: a receipt recorded against the wrong customer. The original
+ * receipt stays on record; its retained amount drops by the moved amount and
+ * the same money is recorded as a new receipt at the right customer.
+ */
+export const crmReceiptTransfers = sqliteTable(
+  'receipt_transfers',
+  {
+    id: text('id').primaryKey(),
+    receipt_id: text('receipt_id')
+      .notNull()
+      .references(() => crmPaymentReceipts.id, { onDelete: 'cascade' }),
+    from_customer_id: text('from_customer_id')
+      .notNull()
+      .references(() => crmCustomers.id, { onDelete: 'cascade' }),
+    to_customer_id: text('to_customer_id')
+      .notNull()
+      .references(() => crmCustomers.id, { onDelete: 'cascade' }),
+    new_receipt_id: text('new_receipt_id')
+      .notNull()
+      .references(() => crmPaymentReceipts.id, { onDelete: 'cascade' }),
+    amount_paise: integer('amount_paise').notNull(),
+    reason: text('reason').notNull(),
+    reference: text('reference').notNull(),
+    action_id: text('action_id').notNull(),
+    created_at: text('created_at').notNull(),
+  },
+  (t) => [
+    index('receipt_transfers_receipt_id_idx').on(t.receipt_id),
+    index('receipt_transfers_from_customer_id_idx').on(t.from_customer_id),
+    index('receipt_transfers_to_customer_id_idx').on(t.to_customer_id),
+    check(
+      'receipt_transfers_amount_paise_check',
+      sql`typeof(${t.amount_paise}) = 'integer' and ${t.amount_paise} > 0`,
+    ),
+    check(
+      'receipt_transfers_customers_check',
+      sql`${t.from_customer_id} <> ${t.to_customer_id}`,
+    ),
+  ],
+);
+
 export type Receipt = typeof crmPaymentReceipts.$inferSelect;
 export type ReceivableEntry = typeof crmReceivableEntries.$inferSelect;
 export class ChargeBalance {
