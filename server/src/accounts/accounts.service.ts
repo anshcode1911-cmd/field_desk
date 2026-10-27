@@ -1,4 +1,3 @@
-import { CreditBalance } from '../credits/credits.model.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -16,7 +15,12 @@ import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js'
 import { DatabaseService } from '../database/database.service.js';
 import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
-import { useCustomer, fail, safe } from '../common/domain.js';
+import {
+  useCustomer,
+  fail,
+  safe,
+  DomainDecision as Decision,
+} from '../common/domain.js';
 
 @Injectable()
 export class AccountsService {
@@ -72,12 +76,8 @@ export class AccountsService {
     const { received } = this.settlement.receipt(receipt);
     if (!received)
       fail('RECEIPT_ALREADY_MOVED', 'This receipt was already moved');
-    const funds = this.creditsRepository.fundsFromReceipt(receipt.id);
-    if (funds.length)
-      fail(
-        'RECEIPT_FUNDS_CREDIT',
-        `This payment funds credit note(s) ${[...new Set(funds.map((fund) => fund.credit_note_id))].join(', ')}. Credit cannot move between customers (CUS-001) and the rules define no way to withdraw its funding, so the payment cannot be moved automatically.`,
-      );
+    const transferId = randomUUID();
+    this.withdrawCreditFunding(c, p, from.name, receipt.id, transferId);
     for (const allocation of this.accountsRepository.allocationsByChargeForReceipt(
       receipt.id,
     ))
@@ -100,7 +100,7 @@ export class AccountsService {
       created_at: c.now,
     });
     this.accountsRepository.insertTransfer(c, {
-      id: randomUUID(),
+      id: transferId,
       receipt_id: receipt.id,
       from_customer_id: from.id,
       to_customer_id: to.id,
@@ -115,6 +115,63 @@ export class AccountsService {
     c.references.receiptId = newReceiptId;
     c.customerId = to.id;
     c.alsoAffects = [from.id];
+  }
+  /**
+   * Credit funded by the moved payment cannot stay with the wrong customer
+   * (CUS-001). Unused funding is withdrawn by a linked negative entry, but
+   * only once Accounts confirms, because it removes credit the customer can
+   * see. Funding that was already applied or refunded must first be reversed
+   * with the existing reversal actions.
+   */
+  private withdrawCreditFunding(
+    c: Context,
+    p: Payload<'MOVE_PAYMENT'>,
+    customerName: string,
+    receiptId: string,
+    transferId: string,
+  ) {
+    const fundings =
+      this.creditsRepository.fundingByCreditForReceipt(receiptId);
+    if (!fundings.length) return;
+    const used = fundings.filter(
+      (funding) =>
+        this.creditsRepository.refundedFromReceipt(
+          funding.credit_note_id,
+          receiptId,
+        ) > 0 ||
+        this.settlement.credit({ id: funding.credit_note_id }).availablePaise <
+          funding.n,
+    );
+    if (used.length)
+      fail(
+        'RECEIPT_FUNDS_CREDIT',
+        `This payment funds credit that has already been applied or refunded (credit note ${used.map((funding) => funding.credit_note_id).join(', ')}). Credit cannot move between customers (CUS-001): reverse those applications or refunds first, then move the payment.`,
+      );
+    const total = safe(fundings.reduce((sum, funding) => sum + funding.n, 0));
+    if (p.creditFunding !== 'WITHDRAW')
+      throw new Decision(
+        [
+          {
+            key: 'creditFunding',
+            prompt: `This payment funds ${total} paise of unused credit for ${customerName}. Moving it withdraws that credit, because credit cannot move between customers (CUS-001).`,
+            options: [
+              {
+                id: 'WITHDRAW',
+                label: 'Withdraw the unused credit and move the payment',
+              },
+            ],
+          },
+        ],
+        'Confirm withdrawing the credit this payment funds',
+      );
+    for (const funding of fundings)
+      this.creditsRepository.insertFunding(c, {
+        id: randomUUID(),
+        credit_note_id: funding.credit_note_id,
+        receipt_id: receiptId,
+        amount_paise: -funding.n,
+        transfer_id: transferId,
+      });
   }
   allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
@@ -162,19 +219,12 @@ export class AccountsService {
     const credits = this.creditsRepository
       .creditsForCustomer(customerId)
       .map((note) => {
-        const appliedPaise = this.creditsRepository.appliedFromCredit(note.id);
-        const refundedPaise = this.creditsRepository.refundedFromCredit(
-          note.id,
-        );
+        const balance = this.settlement.credit(note);
         return {
           ...note,
-          appliedPaise,
-          refundedPaise,
-          availablePaise: new CreditBalance(
-            note.amount_paise,
-            appliedPaise,
-            refundedPaise,
-          ).availablePaise,
+          appliedPaise: balance.appliedPaise,
+          refundedPaise: balance.refundedPaise,
+          availablePaise: balance.availablePaise,
         };
       });
     const receipts = this.accountsRepository

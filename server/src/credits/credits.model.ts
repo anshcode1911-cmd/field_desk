@@ -47,13 +47,15 @@ export const crmCreditFunds = sqliteTable(
       .notNull()
       .references(() => crmPaymentReceipts.id, { onDelete: 'cascade' }),
     amount_paise: integer('amount_paise').notNull(),
+    /** Set on a negative row that withdraws funding when its receipt moves (FDSK-169). */
+    transfer_id: text('transfer_id'),
   },
   (t) => [
     index('credit_funds_credit_note_id_idx').on(t.credit_note_id),
     index('credit_funds_receipt_id_idx').on(t.receipt_id),
     check(
       'credit_funds_amount_paise_check',
-      sql`typeof(${t.amount_paise}) = 'integer' and ${t.amount_paise} > 0`,
+      sql`typeof(${t.amount_paise}) = 'integer' and ((${t.amount_paise} > 0 and ${t.transfer_id} is null) or (${t.amount_paise} < 0 and ${t.transfer_id} is not null))`,
     ),
   ],
 );

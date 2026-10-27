@@ -1,4 +1,3 @@
-import { CreditBalance } from './credits.model.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { CustomersRepository } from '../customers/customers.repository.js';
@@ -63,11 +62,7 @@ export class CreditsService {
     );
     if (!note)
       fail('CREDIT_NOT_FOUND', 'Select a credit belonging to this customer');
-    new CreditBalance(
-      note.amount_paise,
-      this.creditsRepository.appliedFromCredit(note.id),
-      this.creditsRepository.refundedFromCredit(note.id),
-    ).assertAvailable(p.amountPaise, 'application');
+    this.settlement.credit(note).assertAvailable(p.amountPaise, 'application');
     const charge = this.accountsRepository.findCustomerCharge(
       p.chargeId,
       c.customerId,
@@ -95,15 +90,13 @@ export class CreditsService {
     );
     if (!note)
       fail('CREDIT_NOT_FOUND', 'Select a credit belonging to this customer');
-    new CreditBalance(
-      note.amount_paise,
-      this.creditsRepository.appliedFromCredit(note.id),
-      this.creditsRepository.refundedFromCredit(note.id),
-    ).assertAvailable(p.amountPaise, 'refund');
+    this.settlement.credit(note).assertAvailable(p.amountPaise, 'refund');
     let remaining = p.amountPaise;
-    for (const fund of this.creditsRepository.fundsForCredit(note.id)) {
+    for (const fund of this.creditsRepository.fundingByReceiptForCredit(
+      note.id,
+    )) {
       const free =
-        fund.amount_paise -
+        fund.n -
         this.creditsRepository.refundedFromReceipt(note.id, fund.receipt_id);
       const take = Math.min(free, remaining);
       if (!take) continue;
@@ -201,11 +194,7 @@ export class CreditsService {
       .creditsForCustomer(customerId)
       .map((note) => ({
         ...note,
-        availablePaise: new CreditBalance(
-          note.amount_paise,
-          this.creditsRepository.appliedFromCredit(note.id),
-          this.creditsRepository.refundedFromCredit(note.id),
-        ).availablePaise,
+        availablePaise: this.settlement.credit(note).availablePaise,
       }));
   }
 }

@@ -112,6 +112,8 @@ export const crmActionSchema = z.discriminatedUnion('type', [
     toCustomerId: id,
     reason,
     reference: z.string().trim().min(1).max(200),
+    /** Answer to the decision asked when the payment funds unused credit. */
+    creditFunding: z.enum(['WITHDRAW']).optional(),
   }),
   action('REDEEM_POINTS', { customerId: id, chargeId: id, points: amount }),
   action('ISSUE_CREDIT_NOTE', { customerId: id, amountPaise: amount, reason }),

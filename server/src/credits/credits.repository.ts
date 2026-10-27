@@ -1,5 +1,5 @@
 import { Injectable, Module } from '@nestjs/common';
-import { and, desc, eq, gt, lt, min, sum } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, min, sum } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { insertionOrder } from '../database/query-order.js';
@@ -27,13 +27,50 @@ export class CreditsRepository {
         .get()?.value ?? 0,
     );
   }
-  fundsFromReceipt(receiptId: string) {
+  /** Net funding each credit note still holds from one receipt. */
+  fundingByCreditForReceipt(receiptId: string) {
     return this.db
-      .select()
+      .select({
+        credit_note_id: crmCreditFunds.credit_note_id,
+        n: sum(crmCreditFunds.amount_paise).mapWith(Number),
+      })
       .from(crmCreditFunds)
       .where(eq(crmCreditFunds.receipt_id, receiptId))
-      .orderBy(insertionOrder(crmCreditFunds))
-      .all();
+      .groupBy(crmCreditFunds.credit_note_id)
+      .having(gt(sum(crmCreditFunds.amount_paise), 0))
+      .orderBy(min(insertionOrder(crmCreditFunds)))
+      .all()
+      .map((row) => ({ ...row, n: safe(row.n ?? 0) }));
+  }
+  /** Net funding of one credit note per receipt, in funding-record order (CRD-004). */
+  fundingByReceiptForCredit(creditId: string) {
+    return this.db
+      .select({
+        receipt_id: crmCreditFunds.receipt_id,
+        n: sum(crmCreditFunds.amount_paise).mapWith(Number),
+      })
+      .from(crmCreditFunds)
+      .where(eq(crmCreditFunds.credit_note_id, creditId))
+      .groupBy(crmCreditFunds.receipt_id)
+      .having(gt(sum(crmCreditFunds.amount_paise), 0))
+      .orderBy(min(insertionOrder(crmCreditFunds)))
+      .all()
+      .map((row) => ({ ...row, n: safe(row.n ?? 0) }));
+  }
+  /** Funding recorded when the note was issued, before any withdrawal. */
+  fundedAtIssueForCredit(creditId: string) {
+    return safe(
+      this.db
+        .select({ value: sum(crmCreditFunds.amount_paise).mapWith(Number) })
+        .from(crmCreditFunds)
+        .where(
+          and(
+            eq(crmCreditFunds.credit_note_id, creditId),
+            isNull(crmCreditFunds.transfer_id),
+          ),
+        )
+        .get()?.value ?? 0,
+    );
   }
   appliedToCharge(chargeId: string) {
     return safe(

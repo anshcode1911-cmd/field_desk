@@ -33,8 +33,11 @@ export class DomainFailure extends Error {
   }
 }
 export class DomainDecision extends Error {
-  constructor(readonly decisions: ActionResult['decisions']) {
-    super('Additional shipment information is required');
+  constructor(
+    readonly decisions: ActionResult['decisions'],
+    message = 'Additional shipment information is required',
+  ) {
+    super(message);
   }
 }
 export function fail(code: string, message: string): never {

@@ -57,6 +57,13 @@
       "when": 1793131289307,
       "tag": "0007_receipt_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793134751363,
+      "tag": "0008_withdrawable_credit_funding",
+      "breakpoints": true
     }
   ]
 }

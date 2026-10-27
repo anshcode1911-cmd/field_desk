@@ -351,6 +351,9 @@ export class AuditService {
     }
     for (const credit of summary.credits) {
       const funding = this.creditsRepository.fundedForCredit(credit.id);
+      const fundedAtIssue = this.creditsRepository.fundedAtIssueForCredit(
+        credit.id,
+      );
       const invalidApplications = this.creditsRepository.invalidApplications(
         credit.id,
       );
@@ -361,13 +364,14 @@ export class AuditService {
       check(
         `credit:${credit.id}`,
         'Credit remains funded and within application and refund limits',
-        funding === credit.amount_paise &&
+        fundedAtIssue === credit.amount_paise &&
+          funding >= 0 &&
           credit.availablePaise >= 0 &&
           credit.appliedPaise >= 0 &&
           credit.refundedPaise >= 0 &&
           invalidApplications === 0 &&
           invalidRefunds === 0,
-        `Issued ${credit.amount_paise}; funded ${funding}; applied ${credit.appliedPaise}; refunded ${credit.refundedPaise}; open ${credit.availablePaise} paise.`,
+        `Issued ${credit.amount_paise}; funded ${funding}${funding === fundedAtIssue ? '' : ` after ${fundedAtIssue - funding} withdrawn with a moved payment`}; applied ${credit.appliedPaise}; refunded ${credit.refundedPaise}; open ${credit.availablePaise} paise.`,
         [credit.id],
       );
     }

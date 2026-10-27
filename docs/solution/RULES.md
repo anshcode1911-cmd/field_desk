@@ -23,7 +23,7 @@
 | `CORRECT_DISPATCHED_ORDER` | Key Account Manager | Record authorized additional goods that were physically dispatched, with evidence; asks which dispatch they left on. | allocate free cash, refresh rewards | WF-004, WF-005 |
 | `RECEIVE_CUSTOMER_PAYMENT` | Accounts | Record money received from a customer. | allocate free cash, refresh rewards | ACC-002, WF-002 |
 | `ALLOCATE_PAYMENT` | Accounts | Explicitly apply the customer’s unallocated cash. | allocate free cash, refresh rewards | ACC-003, WF-002 |
-| `MOVE_PAYMENT` | Accounts | Move a payment recorded against the wrong customer, with a reason and the bank reference that proves the payer: the wrong customer’s settlements from it are released (their charges reopen and points earned from it are recovered), and the same money is received and applied at the right customer. Refused while the payment funds credit, because credit cannot cross accounts. | allocate free cash, refresh rewards | CUS-001, WF-001, ACC-002, ACC-003, WF-002, REW-003 |
+| `MOVE_PAYMENT` | Accounts | Move a payment recorded against the wrong customer, with a reason and the bank reference that proves the payer: the wrong customer’s settlements from it are released (their charges reopen and points earned from it are recovered), and the same money is received and applied at the right customer. If the payment funds credit, asks before withdrawing the unused credit; credit already applied or refunded must be reversed first, because credit cannot cross accounts. | allocate free cash, refresh rewards | CUS-001, WF-001, ACC-002, ACC-003, WF-002, CRD-001, REW-003 |
 | `REDEEM_POINTS` | Sales, Accounts | Settle a selected charge with available points (one point = one paise), only when no clawback is pending. | — | REW-004 |
 | `ISSUE_CREDIT_NOTE` | Accounts | Reserve unallocated cash as an explicit credit note, with a reason. | — | CRD-001, CRD-002, CRD-006 |
 | `APPLY_CREDIT_NOTE` | Accounts | Settle a selected charge with open credit. | — | CRD-003 |
@@ -84,7 +84,7 @@ First matching row wins; no matching row means the operation is refused.
 | `reward-conservation` | Locked + available + redeemed − clawback pending = retained entitlement; points are never available while clawback is pending. | REW-003 |
 | `redemption-evidence` | Redeemed points equal the recorded point settlements. | REW-004 |
 | `account-position` | Net balance = outstanding charges − unapplied cash − open credit. | ACC-001, ACC-002, CRD-001 |
-| `activity-uniqueness` | Each applied activity has exactly one audit event. | WF-001 |
+| `activity-uniqueness` | Each applied activity has exactly one audit event per affected customer. | WF-001 |
 
 ## Size
 

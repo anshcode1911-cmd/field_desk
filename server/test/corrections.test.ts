@@ -296,7 +296,7 @@ describe('Data corrections', { concurrency: false }, () => {
       assertConsistent(greenfield);
     });
 
-    it('refuses moves by other roles, to the same customer, of foreign or moved receipts, and of receipts funding credit', () => {
+    it('refuses moves by other roles, to the same customer, or of foreign or moved receipts, and asks before touching credit', () => {
       const northside = customer('Northside guarded');
       const greenfield = customer('Greenfield guarded');
       const receiptId = receive(northside, 3 * PRICE, 'UTR-3');
@@ -333,16 +333,158 @@ describe('Data corrections', { concurrency: false }, () => {
         'ACCOUNTS',
       );
       const before = accounts.ledger(northside);
-      const refused = move(
+      const asked = move(
         northside,
         funding,
         greenfield,
         'ACCOUNTS',
+        'NEEDS_DECISION',
+      );
+      assert.equal(asked.decisions[0]?.key, 'creditFunding');
+      assert.match(asked.decisions[0]!.prompt, /CUS-001/);
+      assert.deepEqual(accounts.ledger(northside), before);
+      assertConsistent(northside);
+      assertConsistent(greenfield);
+    });
+  });
+
+  describe('FDSK-169: payments that funded credit', () => {
+    function moveWith(
+      customerId: string,
+      receiptId: string,
+      toCustomerId: string,
+      creditFunding: 'WITHDRAW' | undefined,
+      expected: ActionResult['status'] = 'APPLIED',
+    ) {
+      return run(
+        {
+          type: 'MOVE_PAYMENT',
+          payload: {
+            customerId,
+            receiptId,
+            toCustomerId,
+            reason: 'Bank reference shows Greenfield paid',
+            reference: 'Bank statement 2026-10-27 line 77',
+            ...(creditFunding ? { creditFunding } : {}),
+          },
+        },
+        'ACCOUNTS',
+        expected,
+      );
+    }
+
+    it('withdraws credit a return created from the moved payment once Accounts confirms', () => {
+      const northside = customer('Northside returner');
+      const greenfield = customer('Greenfield returner');
+      const order = deliveredOrder(northside, 2, [2]);
+      const receiptId = run(
+        {
+          type: 'RECEIVE_CUSTOMER_PAYMENT',
+          payload: {
+            customerId: northside,
+            amountPaise: 2 * PRICE,
+            reference: 'UTR-RET',
+          },
+        },
+        'ACCOUNTS',
+      ).references.receiptId!;
+      run(
+        {
+          type: 'RECORD_RETURN',
+          payload: {
+            orderId: order.orderId,
+            items: [{ shipmentLineId: order.shipmentLineId, qty: 1 }],
+            feePaise: 0,
+            reason: 'Damaged box',
+          },
+        },
+        'WAREHOUSE',
+      );
+      assert.equal(accounts.summary(northside).creditsOpenPaise, PRICE);
+
+      moveWith(northside, receiptId, greenfield, undefined, 'NEEDS_DECISION');
+      moveWith(northside, receiptId, greenfield, 'WITHDRAW');
+
+      const wrong = accounts.summary(northside);
+      assert.equal(wrong.creditsOpenPaise, 0);
+      assert.equal(wrong.receivedPaise, 0);
+      assert.equal(wrong.outstandingPaise, PRICE);
+      const right = accounts.summary(greenfield);
+      assert.equal(right.receivedPaise, 2 * PRICE);
+      assert.equal(right.unappliedCashPaise, 2 * PRICE);
+      assertConsistent(northside);
+      assertConsistent(greenfield);
+    });
+
+    it('refuses while the credit is applied, and moves after the application is reversed', () => {
+      const northside = customer('Northside applier');
+      const greenfield = customer('Greenfield applier');
+      const receiptId = run(
+        {
+          type: 'RECEIVE_CUSTOMER_PAYMENT',
+          payload: {
+            customerId: northside,
+            amountPaise: 3 * PRICE,
+            reference: 'UTR-APP',
+          },
+        },
+        'ACCOUNTS',
+      ).references.receiptId!;
+      const creditNoteId = run(
+        {
+          type: 'ISSUE_CREDIT_NOTE',
+          payload: {
+            customerId: northside,
+            amountPaise: 2 * PRICE,
+            reason: 'Advance kept as credit',
+          },
+        },
+        'ACCOUNTS',
+      ).references.creditNoteId!;
+      deliveredOrder(northside, 2, [2]);
+      const chargeId = accounts.summary(northside).charges[0]!.id;
+      run(
+        {
+          type: 'APPLY_CREDIT_NOTE',
+          payload: {
+            customerId: northside,
+            creditNoteId,
+            chargeId,
+            amountPaise: PRICE / 2,
+          },
+        },
+        'ACCOUNTS',
+      );
+      const refused = moveWith(
+        northside,
+        receiptId,
+        greenfield,
+        'WITHDRAW',
         'REJECTED',
       );
-      assert.equal(code(refused), 'RECEIPT_FUNDS_CREDIT');
-      assert.match(refused.errors[0]!.message, /CUS-001/);
-      assert.deepEqual(accounts.ledger(northside), before);
+      assert.equal(refused.errors[0]?.code, 'RECEIPT_FUNDS_CREDIT');
+      assert.match(refused.errors[0]!.message, /reverse/);
+
+      const applicationId = String(
+        accounts.ledger(northside).creditApplications[0]!.id,
+      );
+      run(
+        {
+          type: 'REVERSE_CREDIT_APPLICATION',
+          payload: {
+            customerId: northside,
+            applicationId,
+            amountPaise: PRICE / 2,
+            reason: 'Credit was funded by another customer',
+          },
+        },
+        'ACCOUNTS',
+      );
+      moveWith(northside, receiptId, greenfield, 'WITHDRAW');
+      const wrong = accounts.summary(northside);
+      assert.equal(wrong.creditsOpenPaise, 0);
+      assert.equal(wrong.outstandingPaise, 2 * PRICE);
+      assert.equal(accounts.summary(greenfield).receivedPaise, 3 * PRICE);
       assertConsistent(northside);
       assertConsistent(greenfield);
     });

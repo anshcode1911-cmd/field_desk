@@ -4,6 +4,7 @@ import { AccountsRepository } from '../accounts/accounts.repository.js';
 import { CreditsRepository } from '../credits/credits.repository.js';
 import { RewardsRepository } from '../rewards/rewards.repository.js';
 import { ChargeBalance } from '../accounts/accounts.model.js';
+import { CreditBalance } from '../credits/credits.model.js';
 import type { Receipt, ReceivableEntry } from '../accounts/accounts.model.js';
 import type { ActionContext as Context } from '../common/domain.js';
 import { fail, safe } from '../common/domain.js';
@@ -53,6 +54,18 @@ export class SettlementService {
       reserved,
       free: safe(received - allocated - reserved),
     };
+  }
+
+  /**
+   * CRD-001: issued I = Σ receipt funding (net of withdrawals when a funding
+   * receipt moves), K applied, F refunded, open O = I − K − F.
+   */
+  credit(note: { id: string }) {
+    return new CreditBalance(
+      this.creditsRepository.fundedForCredit(note.id),
+      this.creditsRepository.appliedFromCredit(note.id),
+      this.creditsRepository.refundedFromCredit(note.id),
+    );
   }
 
   /**

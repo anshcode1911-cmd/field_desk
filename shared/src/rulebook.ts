@@ -146,9 +146,17 @@ export const RULEBOOK = {
     then: ['allocate free cash', 'refresh rewards'],
   },
   MOVE_PAYMENT: {
-    rules: ['CUS-001', 'WF-001', 'ACC-002', 'ACC-003', 'WF-002', 'REW-003'],
+    rules: [
+      'CUS-001',
+      'WF-001',
+      'ACC-002',
+      'ACC-003',
+      'WF-002',
+      'CRD-001',
+      'REW-003',
+    ],
     who: ['ACCOUNTS'],
-    says: 'Move a payment recorded against the wrong customer, with a reason and the bank reference that proves the payer: the wrong customer’s settlements from it are released (their charges reopen and points earned from it are recovered), and the same money is received and applied at the right customer. Refused while the payment funds credit, because credit cannot cross accounts.',
+    says: 'Move a payment recorded against the wrong customer, with a reason and the bank reference that proves the payer: the wrong customer’s settlements from it are released (their charges reopen and points earned from it are recovered), and the same money is received and applied at the right customer. If the payment funds credit, asks before withdrawing the unused credit; credit already applied or refunded must be reversed first, because credit cannot cross accounts.',
     then: ['allocate free cash', 'refresh rewards'],
   },
   REDEEM_POINTS: {
@@ -319,7 +327,7 @@ export const INVARIANTS = {
   },
   'activity-uniqueness': {
     rules: ['WF-001'],
-    says: 'Each applied activity has exactly one audit event.',
+    says: 'Each applied activity has exactly one audit event per affected customer.',
   },
 } as const satisfies Record<string, { rules: string[]; says: string }>;
 export type InvariantId = keyof typeof INVARIANTS;
