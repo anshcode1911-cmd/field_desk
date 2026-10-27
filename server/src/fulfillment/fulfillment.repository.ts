@@ -2,6 +2,7 @@ import { Injectable, Module } from '@nestjs/common';
 import {
   and,
   count,
+  desc,
   eq,
   getTableColumns,
   isNotNull,
@@ -288,6 +289,32 @@ export class FulfillmentRepository {
       .where(eq(crmShipmentLines.id, id))
       .run();
     recordUpdate(c, 'shipment_lines', before, { ...before, ...patch });
+  }
+  /**
+   * Delivery confirmations on a shipment line that still count, newest
+   * first, with the units not yet reversed by a delivery correction.
+   */
+  unreversedConfirmationsNewestFirst(lineId: string) {
+    const rows = this.db
+      .select()
+      .from(crmDeliveries)
+      .where(eq(crmDeliveries.shipment_line_id, lineId))
+      .orderBy(desc(insertionOrder(crmDeliveries)))
+      .all();
+    const reversed = new Map<string, number>();
+    for (const row of rows)
+      if (row.reversal_of_id)
+        reversed.set(
+          row.reversal_of_id,
+          (reversed.get(row.reversal_of_id) ?? 0) - row.qty,
+        );
+    return rows
+      .filter((row) => !row.reversal_of_id)
+      .map((row) => ({
+        ...row,
+        remaining: safe(row.qty - (reversed.get(row.id) ?? 0)),
+      }))
+      .filter((row) => row.remaining > 0);
   }
   insertDelivery(c: ActionContext, row: typeof crmDeliveries.$inferInsert) {
     this.db.insert(crmDeliveries).values(row).run();
