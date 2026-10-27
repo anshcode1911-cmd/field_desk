@@ -1,8 +1,7 @@
 # Architecture v1: first draft
 
-> **Provenance:** Written on 28 Oct 2026 by Ansh together with Claude (AI coding agent), working in one chat.
-> Inputs at this point: the assignment PDF, `docs/candidate-walkthrough/*`, and a skim of `actions.service.ts` and `common/domain.ts`.
-> I had **not** yet read the domain services in depth. Ansh did not know which direction to take, so Claude proposed this one and Ansh accepted it.
+> **Provenance (corrected after review):** Written by Claude (AI coding agent) on 28 Oct 2026. Ansh chose to "co-write" v1 in the chat, said he didn't know which direction to take, and asked Claude to suggest one. He contributed no text of his own to this draft. "I" below means the agent.
+> Inputs at this point: the assignment PDF, `docs/candidate-walkthrough/*`, and a skim of `actions.service.ts` and `common/domain.ts`. The domain services had **not** yet been read in depth.
 > Later drafts record what changed and why.
 
 ## 1. The problem as I understand it

@@ -1,6 +1,6 @@
 # Architecture v4: final (as built)
 
-> **Provenance:** Ansh + Claude, 28 Oct 2026, written after implementation. Every claim below describes code on `main` and was verified by tests or by running the app. Differences from v3 are listed first.
+> **Provenance:** Written by Claude on 28 Oct 2026 after implementation and an independent red-team review, for Ansh to review before submission. Every claim below describes code on `main` and was verified by tests or by running the app. Differences from v3 are listed first.
 
 ## 1. What changed from v3
 

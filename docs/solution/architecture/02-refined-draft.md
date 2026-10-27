@@ -1,6 +1,6 @@
 # Architecture v2: refined after reading the code
 
-> **Provenance:** Ansh + Claude, 28 Oct 2026. This revision comes from reading every domain service, model, the audit review, the dispatcher, and the test harness. It records where v1 was wrong.
+> **Provenance (corrected after review):** Written by Claude on 28 Oct 2026, about four minutes after v1, without further input from Ansh. It comes from reading every domain service, model, the audit review, the dispatcher, and the test harness. It records where v1 was wrong.
 
 ## 1. What the code read changed
 

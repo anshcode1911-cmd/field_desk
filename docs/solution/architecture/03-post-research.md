@@ -1,6 +1,6 @@
 # Architecture v3: after research and LLM discussion
 
-> **Provenance:** Ansh + Claude, 28 Oct 2026. Claude read the primary sources linked below and discussed the trade-offs in our chat. This draft records what we borrowed, what we rejected, and why. Sections of v2 that didn't change are not repeated.
+> **Provenance (corrected after review):** Written by Claude on 28 Oct 2026, shortly after v2. Claude searched for and read the primary sources linked below and weighed the trade-offs itself. There was no back-and-forth with Ansh at this stage, so the "discussion with an LLM" in the title is the agent's own analysis. This draft records what was borrowed, what was rejected, and why. Sections of v2 that didn't change are not repeated.
 
 ## 1. Options compared
 
