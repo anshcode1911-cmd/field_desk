@@ -227,6 +227,71 @@ export function nextStatus<L extends Lifecycle<string, string>>(
   return row?.[2];
 }
 
+/**
+ * Consistency checks run for every affected customer before an action
+ * commits. Any failure rolls the whole action back (ACCOUNT_INCONSISTENT),
+ * so no action can leave the books in a state these sentences forbid.
+ */
+export const INVARIANTS = {
+  approval: {
+    rules: ['ORD-005'],
+    says: 'An approved order carries an approval of its current revision.',
+  },
+  quantities: {
+    rules: ['ORD-001', 'FUL-001'],
+    says: 'Per order line: ordered = canceled + dispatched + open; returned ≤ delivered ≤ dispatched; loading ≤ open.',
+  },
+  'reward-accrual': {
+    rules: ['REW-001', 'REW-002'],
+    says: 'Per approved line, earned and locked points match qualifying cash and retained units.',
+  },
+  shipment: {
+    rules: ['FUL-003'],
+    says: 'Every live shipment uses an approved revision; loading batches use the current one.',
+  },
+  'shipment-quantities': {
+    rules: ['FUL-001'],
+    says: 'Per shipment line: returned ≤ delivered ≤ dispatched ≤ loaded.',
+  },
+  'delivery-charge': {
+    rules: ['WF-005'],
+    says: 'Each delivery confirmation has exactly one goods charge worth quantity × shipment price.',
+  },
+  'recognized-value': {
+    rules: ['WF-005', 'RET-002'],
+    says: 'Posted charges = delivered goods − returned goods + return deductions.',
+  },
+  settlement: {
+    rules: ['ACC-001'],
+    says: 'Each charge’s cash, credit, points and outstanding amount are non-negative.',
+  },
+  cash: {
+    rules: ['ACC-002'],
+    says: 'Each receipt’s money is allocated or reserved at most once.',
+  },
+  credit: {
+    rules: ['CRD-001'],
+    says: 'Each credit note is fully receipt-funded and within its application and refund limits.',
+  },
+  'reward-conservation': {
+    rules: ['REW-003'],
+    says: 'Locked + available + redeemed − clawback pending = retained entitlement; points are never available while clawback is pending.',
+  },
+  'redemption-evidence': {
+    rules: ['REW-004'],
+    says: 'Redeemed points equal the recorded point settlements.',
+  },
+  'account-position': {
+    rules: ['ACC-001', 'ACC-002', 'CRD-001'],
+    says: 'Net balance = outstanding charges − unapplied cash − open credit.',
+  },
+  'activity-uniqueness': {
+    rules: ['WF-001'],
+    says: 'Each applied activity has exactly one audit event.',
+  },
+} as const satisfies Record<string, { rules: string[]; says: string }>;
+export type InvariantId = keyof typeof INVARIANTS;
+
 /** True when `role` may perform `action`. */
 export function can(role: Role, action: CommandType): boolean {
   const who: readonly Role[] = RULEBOOK[action].who;

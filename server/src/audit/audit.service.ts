@@ -6,6 +6,7 @@ import {
 import type { User } from '@crm/shared';
 import type { ActionResult, EventRow, AccountReview } from '@crm/shared/crm';
 import { BUSINESS_TERMS_VERSION } from '@crm/shared/crm';
+import { INVARIANTS, type InvariantId } from '@crm/shared/rulebook';
 import { AccountsRepository } from '../accounts/accounts.repository.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js';
@@ -163,12 +164,20 @@ export class AuditService {
     const summary = this.accountsService.summary(customerId);
     const checks: AccountReview['checks'] = [];
     const check = (
-      id: string,
+      id: InvariantId | `${InvariantId}:${string}`,
       label: string,
       passed: boolean,
       details: string,
       references: string[] = [],
-    ) => checks.push({ id, label, passed, details, references });
+    ) =>
+      checks.push({
+        id,
+        rules: INVARIANTS[id.split(':')[0] as InvariantId].rules,
+        label,
+        passed,
+        details,
+        references,
+      });
     let entitlement = 0;
     for (const order of this.ordersRepository.forCustomer(customerId)) {
       const detail = this.ordersService.detail(order.id);

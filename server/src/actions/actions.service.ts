@@ -212,7 +212,9 @@ export class ActionsService {
             if (failedChecks.length)
               fail(
                 'ACCOUNT_INCONSISTENT',
-                failedChecks.map((check) => check.label).join('; '),
+                failedChecks
+                  .map((check) => `${check.rules.join(', ')}: ${check.label}`)
+                  .join('; '),
               );
             this.auditService.enrich(c);
             result.trace.push(

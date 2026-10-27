@@ -139,6 +139,8 @@ export type CommandType = CrmCommand['type'];
 export const BUSINESS_TERMS_VERSION = '2026-10-26.1';
 export interface AccountCheck {
   id: string;
+  /** Canonical rule ids the check enforces (see INVARIANTS in the rulebook). */
+  rules: readonly string[];
   label: string;
   passed: boolean;
   details: string;

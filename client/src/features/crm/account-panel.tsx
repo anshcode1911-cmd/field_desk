@@ -419,7 +419,7 @@ export function AccountPanel({
                   {check.passed ? 'Passed' : 'Failed'} · {check.label}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {check.details}
+                  {check.rules.join(', ')} · {check.details}
                 </p>
               </li>
             ))}
