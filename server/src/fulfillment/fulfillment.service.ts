@@ -8,6 +8,8 @@ import { AccountsService } from '../accounts/accounts.service.js';
 import { RewardsService } from '../rewards/rewards.service.js';
 import { CatalogRepository } from '../catalog/catalog.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
+import { CreditsRepository } from '../credits/credits.repository.js';
+import { RewardsRepository } from '../rewards/rewards.repository.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import {
   authorize,
@@ -28,6 +30,8 @@ export class FulfillmentService {
     private readonly rewardsService: RewardsService,
     private readonly catalogRepository: CatalogRepository,
     private readonly returnsRepository: ReturnsRepository,
+    private readonly creditsRepository: CreditsRepository,
+    private readonly rewardsRepository: RewardsRepository,
   ) {}
   load(c: Context, p: Payload<'START_LOADING'>) {
     authorize(c, 'WAREHOUSE', 'ADMIN');
@@ -164,6 +168,170 @@ export class FulfillmentService {
 
     this.accountsService.allocateCash(c);
 
+    this.rewardsService.refresh(c);
+  }
+  /** FDSK-170, written in the original service style (Solution B). */
+  correctDelivery(c: Context, p: Payload<'CORRECT_DELIVERY'>) {
+    authorize(c, 'KAM', 'ADMIN');
+    const order = useOrder(c, this.ordersRepository.findById(p.orderId));
+    const shipment = this.fulfillmentRepository.findForOrder(
+      p.shipmentId,
+      order.id,
+    );
+    if (!shipment)
+      fail('SHIPMENT_NOT_FOUND', 'Select a shipment belonging to this order');
+    if (shipment.status !== 'DISPATCHED' && shipment.status !== 'DELIVERED')
+      fail(
+        'SHIPMENT_STATE',
+        'Only dispatched or delivered shipments have deliveries to correct',
+      );
+    c.references.shipmentId = shipment.id;
+    for (const item of p.items) {
+      const line = this.fulfillmentRepository.findInShipment(
+        item.shipmentLineId,
+        shipment.id,
+      );
+      if (!line)
+        fail(
+          'LINE_NOT_FOUND',
+          'The shipment line does not belong to this shipment',
+        );
+      const delivered = this.fulfillmentRepository.deliveredForShipmentLine(
+        line.id,
+      );
+      new ShipmentQuantity(line.dispatched_qty, delivered).assertCorrection(
+        item.deliveredQty,
+        this.returnsRepository.returnedForShipmentLine(line.id),
+      );
+      let excess = delivered - item.deliveredQty;
+      for (const confirmation of this.fulfillmentRepository.unreversedConfirmationsNewestFirst(
+        line.id,
+      )) {
+        if (!excess) break;
+        const qty = Math.min(excess, confirmation.remaining);
+        const reversalId = randomUUID();
+        this.fulfillmentRepository.insertDelivery(c, {
+          id: reversalId,
+          shipment_line_id: line.id,
+          order_id: order.id,
+          qty: -qty,
+          reversal_of_id: confirmation.id,
+          reason: p.reason,
+          evidence: p.evidence,
+          action_id: c.id,
+          created_at: c.now,
+        });
+        const [charge] = this.accountsRepository.chargesForDelivery(
+          confirmation.id,
+        );
+        if (!charge)
+          fail('CHARGE_MISMATCH', 'The confirmation has no goods charge');
+        const face =
+          charge.amount_paise +
+          this.accountsRepository.adjustmentsForCharge(charge.id);
+        const reduction = safe(qty * line.unit_price_paise);
+        if (reduction > face)
+          fail(
+            'CHARGE_MISMATCH',
+            'The confirmation’s charge no longer holds this value',
+          );
+        this.accountsRepository.insertCharge(c, {
+          id: randomUUID(),
+          customer_id: c.customerId,
+          order_id: order.id,
+          line_key: line.line_key,
+          shipment_line_id: line.id,
+          kind: 'DELIVERY_CORRECTION',
+          amount_paise: -reduction,
+          adjusts_id: charge.id,
+          source_id: reversalId,
+          action_id: c.id,
+          created_at: c.now,
+        });
+        // Release settlement above the reduced charge (WF-003): cash, then
+        // credit, then points. Same steps as ReturnsService.returnItems.
+        const cash = this.accountsRepository.cashForCharge(charge.id);
+        const credits = this.creditsRepository.appliedToCharge(charge.id);
+        const rewards = this.rewardsRepository.redeemedForCharge(charge.id);
+        let overage = Math.max(
+          0,
+          cash + credits + rewards - (face - reduction),
+        );
+        for (const allocation of this.accountsRepository.cashByReceiptForCharge(
+          charge.id,
+        )) {
+          const take = Math.min(overage, allocation.n);
+          if (!take) continue;
+          this.accountsRepository.insertAllocation(c, {
+            id: randomUUID(),
+            customer_id: c.customerId,
+            receipt_id: allocation.receipt_id,
+            charge_id: charge.id,
+            amount_paise: -take,
+            action_id: c.id,
+            created_at: c.now,
+          });
+          overage -= take;
+        }
+        for (const application of this.creditsRepository.creditByNoteForCharge(
+          charge.id,
+        )) {
+          const take = Math.min(overage, application.n);
+          if (!take) continue;
+          this.creditsRepository.insertApplication(c, {
+            id: randomUUID(),
+            customer_id: c.customerId,
+            credit_note_id: application.credit_note_id,
+            charge_id: charge.id,
+            amount_paise: -take,
+            action_id: c.id,
+            created_at: c.now,
+          });
+          overage -= take;
+        }
+        if (overage > 0) {
+          if (overage > rewards)
+            fail(
+              'SETTLEMENT_MISMATCH',
+              'The correction cannot be settled against its source documents',
+            );
+          this.rewardsRepository.insertRedemption(c, {
+            id: randomUUID(),
+            customer_id: c.customerId,
+            charge_id: charge.id,
+            points: -overage,
+            action_id: c.id,
+            created_at: c.now,
+          });
+          this.rewardsRepository.insertPosting(c, {
+            id: randomUUID(),
+            customer_id: c.customerId,
+            line_key: null,
+            bucket: 'AVAILABLE',
+            points_delta: overage,
+            source_id: reversalId,
+            action_id: c.id,
+            created_at: c.now,
+          });
+          this.rewardsRepository.insertPosting(c, {
+            id: randomUUID(),
+            customer_id: c.customerId,
+            line_key: null,
+            bucket: 'REDEEMED',
+            points_delta: -overage,
+            source_id: reversalId,
+            action_id: c.id,
+            created_at: c.now,
+          });
+        }
+        excess -= qty;
+      }
+    }
+    if (shipment.status === 'DELIVERED')
+      this.fulfillmentRepository.updateShipment(c, shipment.id, {
+        status: 'DISPATCHED',
+      });
+    // Corrections are not a WF-002 allocation occasion: refresh points only.
     this.rewardsService.refresh(c);
   }
   correct(c: Context, p: Payload<'CORRECT_DISPATCHED_ORDER'>) {
