@@ -28,6 +28,11 @@
       "types": "./dist/rulebook.d.ts",
       "import": "./dist/rulebook.js",
       "default": "./dist/rulebook.js"
+    },
+    "./rulebook-doc": {
+      "types": "./dist/rulebook-doc.d.ts",
+      "import": "./dist/rulebook-doc.js",
+      "default": "./dist/rulebook-doc.js"
     }
   },
   "files": [
