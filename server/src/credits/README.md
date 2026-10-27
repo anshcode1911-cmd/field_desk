@@ -4,14 +4,14 @@ Owns receipt-backed customer credit, its funding links, applications to charges,
 
 ## Implementation
 
-- [credits.model.ts](credits.model.ts): Credit notes, receipt funding, application/refund tables, and the `CreditBalance` value object.
+- [credits.model.ts](credits.model.ts): Credit notes, receipt funding (including linked negative rows that withdraw funding when a receipt moves), application/refund tables, and the `CreditBalance` value object.
 - [credits.repository.ts](credits.repository.ts): Typed credit persistence, funding attribution, settlement totals, and reversal limits.
 - [credits.service.ts](credits.service.ts): Explicit credit reservation, application, refund, reversal operations, and available-credit reads.
 - [credits.controller.ts](credits.controller.ts): Authenticated customer credit-note reads.
 
 ## Coordination
 
-Accounts provides receipt and charge evidence; Rewards provides existing point settlement when calculating charge capacity. Returns can reserve released receipt allocations through the credit repository during a return. Explicit settlement commands enter through Actions and append entries rather than overwriting earlier settlements. Refund records describe bookkeeping; this module does not initiate bank transfers.
+Settlement computes charge capacity and credit balances (issued credit is net funding, CRD-001). Refunds split over each receipt's net funding (CRD-004). Accounts withdraws unused funding when it moves a payment to another customer (FDSK-169). Returns can reserve released receipt allocations through the credit repository during a return. Explicit settlement commands enter through Actions and append entries rather than overwriting earlier settlements. Refund records describe bookkeeping; this module does not initiate bank transfers.
 
 ## Related
 

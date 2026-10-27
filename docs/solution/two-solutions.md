@@ -1,6 +1,6 @@
 # Two solutions with different trade-offs
 
-This is bonus deliverable 2. Both solutions implement FDSK-169 and FDSK-170 on the same schema and pass **the same test file** (`server/test/corrections.test.ts`, 8 tests) plus the 251 original tests. They differ only in where the business rules live.
+This is bonus deliverable 2. Both solutions implement FDSK-169 and FDSK-170 on the same schema and pass **the same 8 story tests** (`server/test/corrections.test.ts` as of the branch point) plus the 251 original tests. After the red-team review, `main` gained 2 more tests for payments that funded credit, which B does not support. They differ only in where the business rules live.
 
 - **Solution A** (`main`): the rulebook. Permissions, follow-up policies, lifecycles and invariants are declared once and enforced by a small engine. Settlement arithmetic and the WF-003 release live in one shared module.
 - **Solution B** (`solution-b/plain-services`): no framework. The two stories are written in the repository's original style, with role checks, status checks and follow-up calls inside each service method. That branch's `docs/solution-b.md` explains it.
@@ -9,18 +9,19 @@ This is bonus deliverable 2. Both solutions implement FDSK-169 and FDSK-170 on t
 
 Lines are from `git diff --numstat` over `server/src` and `shared/src`, excluding Markdown.
 
-| Measure                                               | A: rulebook                                                                   | B: plain services                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| Framework mechanism                                   | ~686 lines (rulebook data 331, doc renderer 116, handlers 75, settlement 164) | 0                                                 |
-| Refactor before the stories                           | 23 files, +742 / −341                                                         | none                                              |
-| The stories (schema to finished feature)              | 16 files, +483 / −74                                                          | 13 files, +509 / −35                              |
-| Role checks inside services                           | 0 (one `who` per action)                                                      | 22 `authorize(...)` calls                         |
-| Copies of the WF-003 release (cash → credit → points) | 1, shared by returns and delivery corrections                                 | 2                                                 |
-| Places that compute "receipt money still free"        | 1 (`SettlementService.receipt`)                                               | 5 (each patched for moved receipts)               |
-| Follow-up calls written by hand                       | 0 (declared as `then` and run by the dispatcher)                              | 15                                                |
-| Two-customer follow-ups                               | Declared scope per policy (subject vs every affected customer)                | Swap `c.customerId` between calls                 |
-| Rules a non-technical reader can review               | Generated [RULES.md](RULES.md), test-guarded                                  | Canonical docs only; the code may drift from them |
-| Tests                                                 | 260 (adds the RULES.md sync test)                                             | 259                                               |
+| Measure                                               | A: rulebook                                                                                                            | B: plain services                                                             |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Framework mechanism                                   | ~707 lines (rulebook data 339, doc renderer 116, handlers 75, settlement 177)                                          | 0                                                                             |
+| Refactor before the stories                           | 23 files, +742 / −341                                                                                                  | none                                                                          |
+| The stories (schema to finished feature)              | 16 files, +483 / −74                                                                                                   | 13 files, +509 / −35                                                          |
+| Role checks inside services                           | 0 (one `who` per action)                                                                                               | 22 `authorize(...)` calls                                                     |
+| Copies of the WF-003 release (cash → credit → points) | 1, shared by returns and delivery corrections                                                                          | 2                                                                             |
+| Places that compute "receipt money still free"        | 1 (`SettlementService.receipt`)                                                                                        | 5 (each patched for moved receipts)                                           |
+| Follow-up calls written by hand                       | 0 (declared as `then` and run by the dispatcher)                                                                       | 15                                                                            |
+| Two-customer follow-ups                               | Declared scope per policy (subject vs every affected customer)                                                         | Swap `c.customerId` between calls                                             |
+| Rules a non-technical reader can review               | Generated [RULES.md](RULES.md), test-guarded                                                                           | Canonical docs only; the code may drift from them                             |
+| Tests                                                 | 262 (adds 2 credit-funding story tests and the RULES.md sync test)                                                     | 259                                                                           |
+| Payments that funded credit (added after review)      | Asks, then withdraws unused funding. This first moved 4 inline credit-balance formulas into `SettlementService.credit` | Still refused; supporting it would mean patching the same 4 formulas in place |
 
 ## What the numbers say
 

@@ -111,6 +111,6 @@ ${table(
   ],
 )}
 
-Adding an action adds one row here; adding a status adds lifecycle rows. Scenarios grow multiplicatively, but the rulebook grows additively. Financial state (charges, receipts, credit, points) is quantities, not statuses, so it is guarded by invariants rather than enumerated, and it is not included in the naive count.
+Adding an action adds one row here; adding a status adds lifecycle rows. Scenarios grow multiplicatively, but the rulebook grows additively. Financial state (charges, receipts, credit, points) is quantities, not statuses, so it is guarded by invariants rather than enumerated, and it is not included in the naive count. Algorithms (ACC-003 cash allocation order, the WF-003 release, reward derivation, credit limits) are code rather than declarations. Each lives in one place (\`SettlementService\`, \`AccountsService.allocateCash\`, \`RewardsService.refresh\`), and this page shows which actions trigger them.
 `;
 }
