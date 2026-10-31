@@ -43,7 +43,7 @@ The assumptions behind both stories are listed in [the final architecture, §6](
 | Finding                                                                                     | Severity | Outcome                                                                                                             |
 | ------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
 | Draft headers overstated Ansh's part ("Ansh + Claude", "discussed in our chat")             | High     | **Fixed:** the provenance lines now match the chat (commit `8c654c7`)                                               |
-| Ansh's own time not filled; one time row miscounted                                         | High     | Row corrected. **Ansh's numbers still need adding** (below)                                                         |
+| Ansh's own time not filled; one time row miscounted                                         | High     | **Fixed:** row corrected and Ansh's time added (below)                                                              |
 | The repo must be private (the chat shows a plan to make it public)                          | High     | Flagged to Ansh as the first action before submitting                                                               |
 | FDSK-169 refused any payment that had funded credit, e.g. after a return                    | Medium   | **Fixed:** withdraw unused funding after confirmation; refuse used credit with instructions                         |
 | Rulebook descriptions can drift from behavior; "51 declarations" overstated coverage        | Medium   | **Partly fixed:** an invariant text was corrected, and RULES.md and the decision tree now say what stays imperative |
@@ -98,14 +98,14 @@ The assumptions behind both stories are listed in [the final architecture, §6](
 | 28 Oct 01:48–02:15 | RULES.md generator, decision tree, Solution B, comparison, final architecture, upgrade test, notes | 27 min             |
 | 28 Oct 02:15–02:50 | Red-team review, provenance fix, credit-funding withdrawal, UI fixes, doc corrections              | 35 min             |
 
-**Ansh's own time:** <!-- TODO(Ansh): replace with your real numbers before submitting. -->
+**Ansh's own time:**
 
-| Activity                                  | Time      |
-| ----------------------------------------- | --------- |
-| Reading the assignment and repo docs      | _to fill_ |
-| Decisions and review in the chat          | _to fill_ |
-| Reviewing code and docs before submission | _to fill_ |
-| Preparing for the discussion call         | _to fill_ |
+| Activity                                  | Time     |
+| ----------------------------------------- | -------- |
+| Reading the assignment and repo docs      | 6 hours  |
+| Decisions and review in the chat          | 3 hours  |
+| Reviewing code and docs before submission | 10 hours |
+| Preparing for the discussion call         | 3 hours  |
 
 ## Chat history (deliverable 5)
 
